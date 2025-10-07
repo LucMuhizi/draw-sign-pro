@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Camera, Upload, PenTool } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import SignatureCanvas from "react-signature-canvas";
 import { toast } from "sonner";
 import { Camera as CapCamera } from "@capacitor/camera";
 import { CameraResultType, CameraSource } from "@capacitor/camera";
+import { removeBackground, loadImage } from "@/lib/backgroundRemoval";
 
 interface SignatureCreatorProps {
   onSignatureCreate?: (signature: string) => void;
@@ -30,9 +31,7 @@ export const SignatureCreator = ({ onSignatureCreate }: SignatureCreatorProps) =
       });
 
       if (image.dataUrl) {
-        setSignature(image.dataUrl);
-        onSignatureCreate?.(image.dataUrl);
-        toast.success("Photo captured successfully!");
+        await processImageWithBackgroundRemoval(image.dataUrl);
       }
     } catch (error) {
       console.error("Camera error:", error);
@@ -40,15 +39,42 @@ export const SignatureCreator = ({ onSignatureCreate }: SignatureCreatorProps) =
     }
   };
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processImageWithBackgroundRemoval = async (dataUrl: string) => {
+    try {
+      toast.loading("Removing background...");
+      
+      // Convert data URL to blob
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      
+      // Load image and remove background
+      const img = await loadImage(blob);
+      const processedBlob = await removeBackground(img);
+      
+      // Convert back to data URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setSignature(result);
+        onSignatureCreate?.(result);
+        toast.success("Signature processed successfully!");
+      };
+      reader.readAsDataURL(processedBlob);
+    } catch (error) {
+      console.error("Background removal error:", error);
+      toast.error("Failed to process image. Using original.");
+      setSignature(dataUrl);
+      onSignatureCreate?.(dataUrl);
+    }
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         const result = event.target?.result as string;
-        setSignature(result);
-        onSignatureCreate?.(result);
-        toast.success("Signature uploaded successfully!");
+        await processImageWithBackgroundRemoval(result);
       };
       reader.readAsDataURL(file);
     }

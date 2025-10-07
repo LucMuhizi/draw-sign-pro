@@ -38,7 +38,18 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
         const file = files[0];
-        if (file.type === "application/pdf" || file.type.startsWith("image/")) {
+        const supportedTypes = [
+          "application/pdf",
+          "image/jpeg",
+          "image/jpg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+          "image/bmp",
+          "image/tiff"
+        ];
+        
+        if (supportedTypes.some(type => file.type === type) || file.type.startsWith("image/")) {
           setSelectedFile(file);
           onFileSelect?.(file);
           toast.success("Document uploaded successfully!");
@@ -97,7 +108,7 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
           <input
             type="file"
             id="file-upload"
-            accept=".pdf,image/*"
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,image/*"
             onChange={handleFileInput}
             className="hidden"
           />

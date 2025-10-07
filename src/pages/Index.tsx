@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ActionBar } from "@/components/ActionBar";
 import { DocumentUpload } from "@/components/DocumentUpload";
 import { SignatureCreator } from "@/components/SignatureCreator";
+import { DocumentViewer } from "@/components/DocumentViewer";
 
 const Index = () => {
   const [activeAction, setActiveAction] = useState<string>("upload");
@@ -39,38 +40,42 @@ const Index = () => {
           )}
 
           {activeAction === "add-signature" && (
-            <div className="text-center py-12">
-              <h1 className="text-3xl font-bold text-foreground mb-2">Document Signing</h1>
-              <p className="text-muted-foreground mb-8">Place your signature on the document</p>
+            <div>
               {selectedFile && signature ? (
-                <div className="bg-card rounded-2xl p-8 shadow-soft">
-                  <div className="aspect-[3/4] bg-accent/30 rounded-xl mb-4 flex items-center justify-center">
-                    <p className="text-muted-foreground">Document preview with signature placement</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="flex-1 px-4 py-2 rounded-xl border border-border hover:bg-accent transition-colors">
-                      Clear
-                    </button>
-                    <button className="flex-1 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary-hover transition-colors">
-                      Save
-                    </button>
-                  </div>
-                </div>
+                <DocumentViewer
+                  file={selectedFile}
+                  signature={signature}
+                  onBack={() => setActiveAction("upload")}
+                />
               ) : (
-                <div className="text-muted-foreground">
-                  Please upload a document and create a signature first
+                <div className="text-center py-12">
+                  <h1 className="text-3xl font-bold text-foreground mb-2">Document Signing</h1>
+                  <p className="text-muted-foreground mb-8">Place your signature on the document</p>
+                  <div className="text-muted-foreground">
+                    Please upload a document and create a signature first
+                  </div>
                 </div>
               )}
             </div>
           )}
 
           {activeAction === "download" && (
-            <div className="text-center py-12">
-              <h1 className="text-3xl font-bold text-foreground mb-2">Download</h1>
-              <p className="text-muted-foreground mb-8">Download your signed document</p>
-              <div className="bg-card rounded-2xl p-8 shadow-soft">
-                <p className="text-muted-foreground">Your signed documents will appear here</p>
-              </div>
+            <div>
+              {selectedFile && signature ? (
+                <DocumentViewer
+                  file={selectedFile}
+                  signature={signature}
+                  onBack={() => setActiveAction("upload")}
+                />
+              ) : (
+                <div className="text-center py-12">
+                  <h1 className="text-3xl font-bold text-foreground mb-2">Download</h1>
+                  <p className="text-muted-foreground mb-8">Download your signed document</p>
+                  <div className="bg-card rounded-2xl p-8 shadow-soft">
+                    <p className="text-muted-foreground">Please upload a document and create a signature first</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
