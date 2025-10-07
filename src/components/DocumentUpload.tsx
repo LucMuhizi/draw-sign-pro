@@ -112,11 +112,13 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
             onChange={handleFileInput}
             className="hidden"
           />
-          <label htmlFor="file-upload">
-            <Button type="button" className="bg-primary hover:bg-primary-hover text-primary-foreground">
-              Browse Files
-            </Button>
-          </label>
+          <Button 
+            type="button" 
+            className="bg-primary hover:bg-primary-hover text-primary-foreground"
+            onClick={() => document.getElementById('file-upload')?.click()}
+          >
+            Browse Files
+          </Button>
         </div>
       </div>
     </div>
