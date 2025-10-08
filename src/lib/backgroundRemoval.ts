@@ -75,9 +75,12 @@ export const removeBackground = async (imageElement: HTMLImageElement): Promise<
     
     outputCtx.putImageData(outputImageData, 0, 0);
     console.log('Background removed successfully');
-    
+
+    // Crop canvas to content (non-transparent pixels) to keep only the signature
+    const cropped = cropCanvasToContent(outputCanvas);
+
     return new Promise((resolve, reject) => {
-      outputCanvas.toBlob(
+      cropped.toBlob(
         (blob) => {
           if (blob) {
             resolve(blob);
@@ -102,4 +105,52 @@ export const loadImage = (file: Blob): Promise<HTMLImageElement> => {
     img.onerror = reject;
     img.src = URL.createObjectURL(file);
   });
+};
+
+/**
+ * Crop a canvas to the bounding box of non-transparent pixels.
+ */
+export const cropCanvasToContent = (source: HTMLCanvasElement): HTMLCanvasElement => {
+  const w = source.width;
+  const h = source.height;
+  const ctx = source.getContext('2d');
+  if (!ctx) return source;
+
+  const imgData = ctx.getImageData(0, 0, w, h).data;
+  let minX = w, minY = h, maxX = 0, maxY = 0;
+  let found = false;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = (y * w + x) * 4 + 3; // alpha channel
+      if (imgData[idx] > 10) {
+        found = true;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (!found) return source; // nothing detected, return original
+
+  // add some padding
+  const pad = 8;
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(w, maxX + pad);
+  maxY = Math.min(h, maxY + pad);
+
+  const cw = maxX - minX;
+  const ch = maxY - minY;
+
+  const out = document.createElement('canvas');
+  out.width = cw;
+  out.height = ch;
+  const outCtx = out.getContext('2d');
+  if (!outCtx) return source;
+
+  outCtx.drawImage(source, minX, minY, cw, ch, 0, 0, cw, ch);
+  return out;
 };

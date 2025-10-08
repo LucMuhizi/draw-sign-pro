@@ -8,6 +8,7 @@ const Index = () => {
   const [activeAction, setActiveAction] = useState<string>("upload");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [signature, setSignature] = useState<string>("");
+  const [placedSignaturesCount, setPlacedSignaturesCount] = useState<number>(0);
 
   const handleActionClick = (action: string) => {
     setActiveAction(action);
@@ -32,11 +33,31 @@ const Index = () => {
               <h1 className="text-3xl font-bold text-foreground mb-2 text-center">Upload Document</h1>
               <p className="text-muted-foreground mb-8 text-center">Start by uploading your document</p>
               <DocumentUpload onFileSelect={handleFileSelect} />
+              <div className="mt-6 flex justify-center">
+                <button
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50"
+                  onClick={() => setActiveAction('signature')}
+                  disabled={!selectedFile}
+                >
+                  Next: Signature
+                </button>
+              </div>
             </div>
           )}
 
           {activeAction === "signature" && (
-            <SignatureCreator onSignatureCreate={handleSignatureCreate} />
+            <div>
+              <SignatureCreator onSignatureCreate={handleSignatureCreate} />
+              <div className="mt-6 flex justify-center">
+                <button
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50"
+                  onClick={() => setActiveAction('add-signature')}
+                  disabled={!signature}
+                >
+                  Next: Place Signature
+                </button>
+              </div>
+            </div>
           )}
 
           {activeAction === "add-signature" && (
@@ -46,6 +67,7 @@ const Index = () => {
                   file={selectedFile}
                   signature={signature}
                   onBack={() => setActiveAction("upload")}
+                  onSignaturePlaced={(count) => setPlacedSignaturesCount(count)}
                 />
               ) : (
                 <div className="text-center py-12">
@@ -54,6 +76,18 @@ const Index = () => {
                   <div className="text-muted-foreground">
                     Please upload a document and create a signature first
                   </div>
+                </div>
+              )}
+              {/* Add a next button to move to download if signatures have been placed */}
+              {selectedFile && signature && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50"
+                    onClick={() => setActiveAction('download')}
+                    disabled={placedSignaturesCount === 0}
+                  >
+                    Next: Download
+                  </button>
                 </div>
               )}
             </div>

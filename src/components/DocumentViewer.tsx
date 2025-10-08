@@ -23,9 +23,10 @@ interface DocumentViewerProps {
   file: File;
   signature?: string;
   onBack?: () => void;
+  onSignaturePlaced?: (count: number) => void;
 }
 
-export const DocumentViewer = ({ file, signature, onBack }: DocumentViewerProps) => {
+export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: DocumentViewerProps) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [signatures, setSignatures] = useState<SignaturePlacement[]>([]);
@@ -61,37 +62,72 @@ export const DocumentViewer = ({ file, signature, onBack }: DocumentViewerProps)
       height: 60,
       page: currentPage,
     };
-    setSignatures([...signatures, newSignature]);
+    const next = [...signatures, newSignature];
+    setSignatures(next);
     toast.success("Signature added! Drag to position it.");
+    // notify parent that a signature placeholder was added
+    onSignaturePlaced?.(next.length);
   };
 
-  const handleMouseDown = (e: React.MouseEvent, sigId: string) => {
-    const sig = signatures.find((s) => s.id === sigId);
+  // Pointer-based dragging & click-to-place
+  const handlePointerDown = (e: React.PointerEvent, sigId?: string) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+
+    if (sigId) {
+      const sig = signatures.find((s) => s.id === sigId);
+      if (!sig) return;
+      setDraggingSignature(sigId);
+      setDragOffset({ x: e.clientX - sig.x - rect.left, y: e.clientY - sig.y - rect.top });
+      (e.target as Element).setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // If user clicks on empty area and there are existing placeholder signatures,
+    // place the most recently added placeholder at the click position. If there
+    // are no placeholders but a signature image exists, create & place a new one.
+    if (signatures.length > 0) {
+      const last = signatures[signatures.length - 1];
+      const x = Math.max(0, Math.min(e.clientX - rect.left - last.width / 2, rect.width - last.width));
+      const y = Math.max(0, Math.min(e.clientY - rect.top - last.height / 2, rect.height - last.height));
+      setSignatures(signatures.map((s, i) => i === signatures.length - 1 ? { ...s, x, y } : s));
+      onSignaturePlaced?.(signatures.length);
+      return;
+    }
+
+    // No placeholders present: create & place a new signature if a signature image exists
+    if (signature) {
+      const newSignature: SignaturePlacement = {
+        id: `sig-${Date.now()}`,
+        x: Math.max(0, Math.min(e.clientX - rect.left - 75, rect.width - 150)),
+        y: Math.max(0, Math.min(e.clientY - rect.top - 30, rect.height - 60)),
+        width: 150,
+        height: 60,
+        page: currentPage,
+      };
+      const next = [...signatures, newSignature];
+      setSignatures(next);
+      onSignaturePlaced?.(next.length);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!draggingSignature || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const sig = signatures.find((s) => s.id === draggingSignature);
     if (!sig) return;
 
-    setDraggingSignature(sigId);
-    setDragOffset({
-      x: e.clientX - sig.x,
-      y: e.clientY - sig.y,
-    });
+    const x = Math.max(0, Math.min(e.clientX - rect.left - dragOffset.x, rect.width - sig.width));
+    const y = Math.max(0, Math.min(e.clientY - rect.top - dragOffset.y, rect.height - sig.height));
+
+    setSignatures(signatures.map((s) => s.id === draggingSignature ? { ...s, x, y } : s));
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!draggingSignature || !containerRef.current) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left - dragOffset.x, rect.width - 150));
-    const y = Math.max(0, Math.min(e.clientY - rect.top - dragOffset.y, rect.height - 60));
-
-    setSignatures(
-      signatures.map((sig) =>
-        sig.id === draggingSignature ? { ...sig, x, y } : sig
-      )
-    );
-  };
-
-  const handleMouseUp = () => {
+  const handlePointerUp = (e?: React.PointerEvent) => {
     setDraggingSignature(null);
+    if (e && (e.target as Element).releasePointerCapture) {
+      try { (e.target as Element).releasePointerCapture((e as any).pointerId); } catch {}
+    }
   };
 
   const removeSignature = (sigId: string) => {
@@ -192,9 +228,9 @@ export const DocumentViewer = ({ file, signature, onBack }: DocumentViewerProps)
         <div
           ref={containerRef}
           className="relative bg-accent/30 rounded-lg overflow-hidden"
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
         >
           {isImage ? (
             <img src={fileUrl} alt="Document" className="w-full h-auto" />
@@ -204,28 +240,35 @@ export const DocumentViewer = ({ file, signature, onBack }: DocumentViewerProps)
             </Document>
           )}
 
-          {signatures
+      {signatures
             .filter((sig) => isImage || sig.page === currentPage)
             .map((sig) => (
               <div
                 key={sig.id}
-                className="absolute cursor-move group"
+                className="absolute group"
                 style={{
                   left: sig.x,
                   top: sig.y,
                   width: sig.width,
                   height: sig.height,
                 }}
-                onMouseDown={(e) => handleMouseDown(e, sig.id)}
+                onPointerDown={(e) => handlePointerDown(e, sig.id)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
               >
                 <img
                   src={signature}
                   alt="Signature"
-                  className="w-full h-full object-contain border-2 border-primary rounded bg-background/90"
+                  className="w-full h-full object-contain bg-background/90"
                   draggable={false}
                 />
                 <button
-                  onClick={() => removeSignature(sig.id)}
+                  onClick={() => { 
+                    const newSigs = signatures.filter((s) => s.id !== sig.id);
+                    setSignatures(newSigs);
+                    toast.success("Signature removed");
+                    onSignaturePlaced?.(newSigs.length);
+                  }}
                   className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                 >
                   <Trash2 className="w-3 h-3" />
