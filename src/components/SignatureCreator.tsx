@@ -40,9 +40,9 @@ export const SignatureCreator = ({ onSignatureCreate }: SignatureCreatorProps) =
   };
 
   const processImageWithBackgroundRemoval = async (dataUrl: string) => {
+    const toastId = toast.loading("Removing background...");
+    
     try {
-      toast.loading("Removing background...");
-      
       // Convert data URL to blob
       const response = await fetch(dataUrl);
       const blob = await response.blob();
@@ -57,12 +57,12 @@ export const SignatureCreator = ({ onSignatureCreate }: SignatureCreatorProps) =
         const result = e.target?.result as string;
         setSignature(result);
         onSignatureCreate?.(result);
-        toast.success("Signature processed successfully!");
+        toast.success("Signature processed successfully!", { id: toastId });
       };
       reader.readAsDataURL(processedBlob);
     } catch (error) {
       console.error("Background removal error:", error);
-      toast.error("Failed to process image. Using original.");
+      toast.error("Failed to process image. Using original.", { id: toastId });
       setSignature(dataUrl);
       onSignatureCreate?.(dataUrl);
     }
