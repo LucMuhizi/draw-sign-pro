@@ -31,6 +31,30 @@ function resizeImageIfNeeded(canvas: HTMLCanvasElement, ctx: CanvasRenderingCont
   return false;
 }
 
+/**
+ * Convert image to high-contrast black and white
+ */
+function convertToBlackAndWhite(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  
+  for (let i = 0; i < data.length; i += 4) {
+    // Convert to grayscale
+    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    
+    // Apply threshold for black and white (adjust threshold to capture pen strokes)
+    const threshold = 180; // Lower value = more sensitive to darker colors
+    const bw = gray < threshold ? 0 : 255;
+    
+    data[i] = bw;     // R
+    data[i + 1] = bw; // G
+    data[i + 2] = bw; // B
+    // Keep alpha as is
+  }
+  
+  ctx.putImageData(imageData, 0, 0);
+}
+
 export const removeBackground = async (imageElement: HTMLImageElement): Promise<Blob> => {
   try {
     console.log('Starting background removal...');
@@ -46,6 +70,9 @@ export const removeBackground = async (imageElement: HTMLImageElement): Promise<
     if (!ctx) throw new Error('Could not get canvas context');
     
     resizeImageIfNeeded(canvas, ctx, imageElement);
+    
+    // Convert to black and white before processing
+    convertToBlackAndWhite(canvas, ctx);
     console.log(`Image dimensions: ${canvas.width}x${canvas.height}`);
     
     const imageData = canvas.toDataURL('image/jpeg', 0.8);
