@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DocuSign</string>
+    <string name="title_activity_main">DocuSign</string>
+    <string name="package_name">app.lovable.f2f1a939c2fa48c7959d8758351cf789</string>
+    <string name="custom_url_scheme">app.lovable.f2f1a939c2fa48c7959d8758351cf789</string>
+</resources>

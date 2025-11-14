@@ -76,6 +76,81 @@ export const removeBackground = async (imageElement: HTMLImageElement): Promise<
     outputCtx.putImageData(outputImageData, 0, 0);
     console.log('Background removed successfully');
 
+    // Post-process to make signature strokes clearer but preserve original
+    // stroke colors. We'll be conservative to avoid removing thin strokes.
+    const w = outputCanvas.width;
+    const h = outputCanvas.height;
+    const img = outputCtx.getImageData(0, 0, w, h);
+    const px = img.data;
+
+    // Build initial binary mask from alpha channel
+    const mask = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const a = px[i * 4 + 3];
+      mask[i] = a > 8 ? 1 : 0; // more permissive threshold
+    }
+
+    const neighborsSet = (m: Uint8Array, x: number, y: number) => {
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const nx = x + ox;
+          const ny = y + oy;
+          if (nx >= 0 && ny >= 0 && nx < w && ny < h) {
+            m[ny * w + nx] = 1;
+          }
+        }
+      }
+    };
+
+    // A conservative dilate (1 iteration)
+    const proc = mask.slice();
+    const tmp = proc.slice();
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (mask[y * w + x]) neighborsSet(tmp, x, y);
+      }
+    }
+    // Erode once to smooth (closing)
+    const eroded = tmp.slice();
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        if (tmp[idx]) {
+          // check neighborhood
+          let keep = 1;
+          for (let oy = -1; oy <= 1 && keep; oy++) {
+            for (let ox = -1; ox <= 1; ox++) {
+              const nx = x + ox;
+              const ny = y + oy;
+              if (nx >= 0 && ny >= 0 && nx < w && ny < h) {
+                if (tmp[ny * w + nx] === 0) {
+                  keep = 0;
+                  break;
+                }
+              }
+            }
+          }
+          eroded[idx] = keep;
+        } else {
+          eroded[idx] = 0;
+        }
+      }
+    }
+
+    // Preserve original RGB values but set alpha based on processed mask
+    for (let i = 0; i < w * h; i++) {
+      const off = i * 4;
+      if (eroded[i]) {
+        // keep original color, ensure fully opaque
+        px[off + 3] = 255;
+      } else {
+        // transparent
+        px[off + 3] = 0;
+      }
+    }
+
+    outputCtx.putImageData(img, 0, 0);
+
     // Crop canvas to content (non-transparent pixels) to keep only the signature
     const cropped = cropCanvasToContent(outputCanvas);
 

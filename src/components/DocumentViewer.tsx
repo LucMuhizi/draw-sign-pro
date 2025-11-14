@@ -6,6 +6,8 @@ import { ChevronLeft, ChevronRight, Download, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Capacitor } from "@capacitor/core";
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -35,6 +37,7 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
   const containerRef = useRef<HTMLDivElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
   const [isImage, setIsImage] = useState(false);
+  const [pageWidth, setPageWidth] = useState<number>(800);
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -42,6 +45,27 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
     setIsImage(file.type.startsWith("image/"));
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  // Update page rendering width based on container or window size so PDF fits on small screens
+  useEffect(() => {
+    const updateWidth = () => {
+      const parent = containerRef.current;
+      const padding = 32; // account for container padding
+      let w = 800;
+      if (parent) {
+        w = parent.clientWidth - padding;
+      } else if (typeof window !== 'undefined') {
+        w = Math.min(800, window.innerWidth - padding);
+      }
+      // clamp width to a sensible range
+      w = Math.max(280, Math.min(800, w));
+      setPageWidth(Math.round(w));
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -140,40 +164,176 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
 
     try {
       toast.loading("Generating signed document...");
-      
+      // Temporarily update live DOM styles to hide UI and remove borders so
+      // html2canvas captures the actual rendered PDF content and signatures.
+      const src = containerRef.current! as HTMLElement;
+      const original = {
+        background: src.style.background,
+        border: src.style.border,
+        borderRadius: src.style.borderRadius,
+        overflow: src.style.overflow,
+      };
+
+      const hiddenButtons: Array<{ el: HTMLElement; display: string }> = [];
+      src.querySelectorAll('button').forEach((b) => {
+        const be = b as HTMLElement;
+        hiddenButtons.push({ el: be, display: be.style.display });
+        be.style.display = 'none';
+      });
+
+      const hiddenToolbars: Array<{ el: HTMLElement; display: string }> = [];
+      src.querySelectorAll('[role="toolbar"]').forEach((el) => {
+        const ee = el as HTMLElement;
+        hiddenToolbars.push({ el: ee, display: ee.style.display });
+        ee.style.display = 'none';
+      });
+
+      const imgStyles: Array<{ el: HTMLImageElement; border: string; background: string; boxShadow: string }> = [];
+      src.querySelectorAll('img').forEach((img) => {
+        const ie = img as HTMLImageElement;
+        imgStyles.push({ el: ie, border: ie.style.border, background: ie.style.background, boxShadow: ie.style.boxShadow });
+        ie.style.border = 'none';
+        ie.style.background = 'transparent';
+        ie.style.boxShadow = 'none';
+      });
+
+      // Apply container styles for export
+      src.style.background = '#ffffff';
+      src.style.border = 'none';
+      src.style.borderRadius = '0';
+      src.style.overflow = 'visible';
+
+      // Render canvas from live DOM
+      const canvas = await html2canvas(src, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        allowTaint: false,
+      });
+
+      // Restore original styles
+      src.style.background = original.background;
+      src.style.border = original.border;
+      src.style.borderRadius = original.borderRadius;
+      src.style.overflow = original.overflow;
+
+      hiddenButtons.forEach(({ el, display }) => (el.style.display = display));
+      hiddenToolbars.forEach(({ el, display }) => (el.style.display = display));
+      imgStyles.forEach(({ el, border, background, boxShadow }) => {
+        el.style.border = border;
+        el.style.background = background;
+        el.style.boxShadow = boxShadow;
+      });
+
+      const isNative = Capacitor.isNativePlatform();
+      const fileName = `signed-${file.name.replace(/\.[^/.]+$/, "")}`;
+
       if (isImage) {
-        // For images, capture as PNG
-        const canvas = await html2canvas(containerRef.current, {
-          scale: 2,
-          useCORS: true,
-        });
-        
-        canvas.toBlob((blob) => {
-          if (blob) {
+        // For images, convert canvas to base64
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            toast.error("Failed to generate image");
+            return;
+          }
+
+          if (isNative) {
+            try {
+              // Convert blob to base64
+              const base64Data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  const base64String = reader.result as string;
+                  // Remove data URL prefix (data:image/png;base64,)
+                  const base64Data = base64String.split(',')[1];
+                  resolve(base64Data);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+
+              const fileExtension = file.name.split('.').pop() || 'png';
+              const fileNameWithExt = `${fileName}.${fileExtension}`;
+
+              // Save to Documents directory
+              const result = await Filesystem.writeFile({
+                path: fileNameWithExt,
+                data: base64Data,
+                directory: Directory.Documents,
+                encoding: Encoding.UTF8,
+              });
+
+              const filePath = result.uri;
+              
+              // Show success with file path
+              toast.success(`Document saved to Documents folder!\nPath: ${filePath}`, {
+                duration: 8000,
+              });
+            } catch (error) {
+              console.error("Filesystem error:", error);
+              toast.error(`Failed to save file: ${error}`);
+            }
+          } else {
+            // Browser fallback
             const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
+            const link = document.createElement('a');
             link.href = url;
             link.download = `signed-${file.name}`;
             link.click();
             URL.revokeObjectURL(url);
-            toast.success("Document downloaded!");
+            toast.success('Document downloaded!');
           }
-        });
+        }, file.type || 'image/png');
       } else {
         // For PDFs, create a new PDF with signatures
-        const pdf = new jsPDF();
-        const canvas = await html2canvas(containerRef.current, {
-          scale: 2,
-          useCORS: true,
-        });
-        
-        const imgData = canvas.toDataURL("image/png");
-        const imgWidth = 210;
+        const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+        const imgData = canvas.toDataURL('image/png');
+        const pageWidth = 210; // A4 width in mm
+        const imgWidth = pageWidth;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
         
-        pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-        pdf.save(`signed-${file.name}`);
-        toast.success("Document downloaded!");
+        if (isNative) {
+          try {
+            // Convert PDF to base64
+            const pdfBlob = pdf.output('blob');
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64String = reader.result as string;
+                // Remove data URL prefix
+                const base64Data = base64String.split(',')[1];
+                resolve(base64Data);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(pdfBlob);
+            });
+
+            const fileNameWithExt = `${fileName}.pdf`;
+
+            // Save to Documents directory
+            const result = await Filesystem.writeFile({
+              path: fileNameWithExt,
+              data: base64Data,
+              directory: Directory.Documents,
+              encoding: Encoding.UTF8,
+            });
+
+            const filePath = result.uri;
+            
+            // Show success with file path
+            toast.success(`Document saved to Documents folder!\nPath: ${filePath}`, {
+              duration: 8000,
+            });
+          } catch (error) {
+            console.error("Filesystem error:", error);
+            toast.error(`Failed to save file: ${error}`);
+          }
+        } else {
+          // Browser fallback
+          pdf.save(`${fileName}.pdf`);
+          toast.success('Document downloaded!');
+        }
       }
     } catch (error) {
       console.error("Download error:", error);
@@ -191,7 +351,7 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
         <h2 className="text-xl font-bold text-foreground">{file.name}</h2>
         <Button onClick={downloadSignedDocument} className="bg-primary hover:bg-primary-hover">
           <Download className="w-4 h-4 mr-2" />
-          Download
+          Save
         </Button>
       </div>
 
@@ -233,10 +393,10 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
           onPointerUp={handlePointerUp}
         >
           {isImage ? (
-            <img src={fileUrl} alt="Document" className="w-full h-auto" />
+            <img src={fileUrl} alt="Document" className="w-full h-auto max-w-full" />
           ) : (
             <Document file={fileUrl} onLoadSuccess={onDocumentLoadSuccess}>
-              <Page pageNumber={currentPage} width={800} />
+              <Page pageNumber={currentPage} width={pageWidth} />
             </Document>
           )}
 

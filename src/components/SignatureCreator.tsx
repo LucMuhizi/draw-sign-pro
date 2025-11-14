@@ -115,7 +115,7 @@ export const SignatureCreator = ({ onSignatureCreate }: SignatureCreatorProps) =
 
           <Card
             className="p-4 flex items-center gap-4 cursor-pointer hover:shadow-soft transition-shadow"
-            onClick={handleTakePhoto}
+            onClick={() => setMethod('photo')}
           >
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <Camera className="w-5 h-5 text-primary" />
@@ -162,12 +162,35 @@ export const SignatureCreator = ({ onSignatureCreate }: SignatureCreatorProps) =
         </div>
       )}
 
+      {method === 'photo' && (
+        <div className="space-y-4">
+          <div className="bg-accent/30 rounded-lg p-4 flex flex-col items-center justify-center">
+            <h3 className="text-lg font-medium mb-3">Take a Photo</h3>
+            <div className="w-full max-w-2xl h-64 bg-black rounded-md overflow-hidden flex items-center justify-center">
+              {signature ? (
+                <img src={signature} alt="Signature Preview" className="max-h-full object-contain" />
+              ) : (
+                <div className="text-sm text-muted-foreground">No photo yet — use the button below to take one</div>
+              )}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button onClick={handleTakePhoto} className="bg-primary hover:bg-primary-hover text-primary-foreground">Open Camera</Button>
+              <label htmlFor="signature-upload" className="cursor-pointer">
+                <Button className="bg-secondary">Upload Photo</Button>
+              </label>
+              <input type="file" id="signature-upload" accept="image/*" onChange={handleUpload} className="hidden" />
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">After capture we remove the background and show a preview — use Back to cancel.</p>
+          </div>
+        </div>
+      )}
+
       {signature && (
         <Card className="p-6">
           <h3 className="text-sm font-medium text-muted-foreground mb-2">Signature Preview</h3>
           <p className="text-xs text-muted-foreground mb-3">Your signature will appear here</p>
           <div className="bg-accent/30 rounded-lg p-4 flex items-center justify-center min-h-[120px]">
-            <img src={signature} alt="Signature" className="max-w-full max-h-32 object-contain" />
+            <img src={signature} alt="Signature" className="max-w-full max-h-40 object-contain" />
           </div>
         </Card>
       )}
