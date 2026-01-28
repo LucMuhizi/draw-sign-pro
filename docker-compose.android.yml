@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  android-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile.android
+    container_name: android-apk-builder
+    volumes:
+      # Mount output directory to get the APK
+      - ./android/app/build/outputs/apk:/app/android/app/build/outputs/apk
+    # This container will exit after building, which is expected
+
+
+

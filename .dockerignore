@@ -9,9 +9,9 @@ README.md
 .env.*.local
 *.log
 .DS_Store
-android
 .vscode
 .idea
 *.swp
 *.swo
 *~
+# Note: android folder is needed for Dockerfile.android, so don't exclude it

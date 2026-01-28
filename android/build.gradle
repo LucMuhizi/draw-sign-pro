@@ -34,6 +34,24 @@ subprojects {
                 }
             }
         }
+        // Force Java 17 for all Java compilation tasks
+        tasks.withType(JavaCompile).configureEach {
+            sourceCompatibility = JavaVersion.VERSION_17
+            targetCompatibility = JavaVersion.VERSION_17
+        }
+    }
+}
+
+// Configure Kotlin JVM target for all projects (including node_modules)
+allprojects {
+    afterEvaluate { project ->
+        project.tasks.matching { it.name.contains('compile') && it.name.contains('Kotlin') }.configureEach { task ->
+            if (task.hasProperty('kotlinOptions')) {
+                task.kotlinOptions {
+                    jvmTarget = "17"
+                }
+            }
+        }
     }
 }
 

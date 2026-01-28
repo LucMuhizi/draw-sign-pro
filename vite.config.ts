@@ -5,6 +5,8 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  // Use relative paths for Capacitor compatibility
+  base: "./",
   server: {
     host: "::",
     port: 8080,
@@ -16,8 +18,14 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    // Don't externalize Capacitor modules - they need to be bundled
+    // Capacitor provides the runtime bridge, but the imports need to be resolved
     rollupOptions: {
-      external: ["@capacitor/core", "@capacitor/filesystem"],
+      // Removed external config - let Vite bundle everything
     },
+  },
+  optimizeDeps: {
+    // Ensure Capacitor modules are pre-bundled during dev
+    include: ["@capacitor/core", "@capacitor/filesystem", "@capacitor/camera"],
   },
 }));
