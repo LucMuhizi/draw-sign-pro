@@ -2,7 +2,6 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
-// Error boundary for better debugging
 window.addEventListener('error', (event) => {
   console.error('Global error:', event.error);
 });

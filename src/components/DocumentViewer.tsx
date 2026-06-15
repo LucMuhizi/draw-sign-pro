@@ -1,34 +1,37 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ChevronLeft, ChevronRight, Download, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Trash2, Check, Signature, ScanLine, Share2 } from "lucide-react";
 import { toast } from "sonner";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
+import { embedSignaturesIntoPDF } from "@/lib/pdfSigner";
+import { composeSignedImage } from "@/lib/imageSigner";
+import type { SignaturePlacement } from "@/lib/pdfSigner";
+import type { SavedSignature } from "@/lib/signatureStorage";
+import { useAuth } from "@/lib/AuthContext";
+import { saveDocumentRecord } from "@/lib/documentHistory";
+import { hashDocument, generateCertificate, appendCertificateToDocument } from "@/lib/auditTrail";
+import { detectSignatureFields, type DetectedField } from "@/lib/ocrFields";
+import { motion, AnimatePresence } from "framer-motion";
+import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
+import { shareDocument } from "@/lib/share";
+import { VoiceAnnotation } from "@/components/VoiceAnnotation";
 
-// Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-
-interface SignaturePlacement {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  page: number;
-}
 
 interface DocumentViewerProps {
   file: File;
   signature?: string;
   onBack?: () => void;
   onSignaturePlaced?: (count: number) => void;
+  savedSignatures?: SavedSignature[];
+  onSignatureChange?: (signature: string) => void;
 }
 
-export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: DocumentViewerProps) => {
+export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced, savedSignatures, onSignatureChange }: DocumentViewerProps) => {
+  const { user } = useAuth();
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [signatures, setSignatures] = useState<SignaturePlacement[]>([]);
@@ -38,6 +41,13 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
   const [fileUrl, setFileUrl] = useState<string>("");
   const [isImage, setIsImage] = useState(false);
   const [pageWidth, setPageWidth] = useState<number>(800);
+  const [detectedFields, setDetectedFields] = useState<DetectedField[]>([]);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [resizingSignature, setResizingSignature] = useState<string | null>(null);
+  const [resizeCorner, setResizeCorner] = useState<string | null>(null);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, w: 0, h: 0 });
+  const [attachedVoices, setAttachedVoices] = useState<Record<string, { blobUrl: string; duration: number }>>({});
+  const pinchRef = useRef<{ sigId: string; dist: number; w: number; h: number } | null>(null);
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -46,18 +56,16 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  // Update page rendering width based on container or window size so PDF fits on small screens
   useEffect(() => {
     const updateWidth = () => {
       const parent = containerRef.current;
-      const padding = 32; // account for container padding
+      const padding = 32;
       let w = 800;
       if (parent) {
         w = parent.clientWidth - padding;
       } else if (typeof window !== 'undefined') {
         w = Math.min(800, window.innerWidth - padding);
       }
-      // clamp width to a sensible range
       w = Math.max(280, Math.min(800, w));
       setPageWidth(Math.round(w));
     };
@@ -88,12 +96,11 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
     };
     const next = [...signatures, newSignature];
     setSignatures(next);
+    hapticMedium();
     toast.success("Signature added! Drag to position it.");
-    // notify parent that a signature placeholder was added
     onSignaturePlaced?.(next.length);
   };
 
-  // Pointer-based dragging & click-to-place
   const handlePointerDown = (e: React.PointerEvent, sigId?: string) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -107,9 +114,6 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
       return;
     }
 
-    // If user clicks on empty area and there are existing placeholder signatures,
-    // place the most recently added placeholder at the click position. If there
-    // are no placeholders but a signature image exists, create & place a new one.
     if (signatures.length > 0) {
       const last = signatures[signatures.length - 1];
       const x = Math.max(0, Math.min(e.clientX - rect.left - last.width / 2, rect.width - last.width));
@@ -119,7 +123,6 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
       return;
     }
 
-    // No placeholders present: create & place a new signature if a signature image exists
     if (signature) {
       const newSignature: SignaturePlacement = {
         id: `sig-${Date.now()}`,
@@ -136,258 +139,365 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!draggingSignature || !containerRef.current) return;
+    if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const sig = signatures.find((s) => s.id === draggingSignature);
-    if (!sig) return;
 
-    const x = Math.max(0, Math.min(e.clientX - rect.left - dragOffset.x, rect.width - sig.width));
-    const y = Math.max(0, Math.min(e.clientY - rect.top - dragOffset.y, rect.height - sig.height));
+    if (draggingSignature) {
+      const sig = signatures.find((s) => s.id === draggingSignature);
+      if (!sig) return;
+      const x = Math.max(0, Math.min(e.clientX - rect.left - dragOffset.x, rect.width - sig.width));
+      const y = Math.max(0, Math.min(e.clientY - rect.top - dragOffset.y, rect.height - sig.height));
+      setSignatures(signatures.map((s) => s.id === draggingSignature ? { ...s, x, y } : s));
+      return;
+    }
 
-    setSignatures(signatures.map((s) => s.id === draggingSignature ? { ...s, x, y } : s));
+    if (resizingSignature && resizeCorner) {
+      const sig = signatures.find((s) => s.id === resizingSignature);
+      if (!sig) return;
+      const dx = e.clientX - resizeStart.x;
+      const dy = e.clientY - resizeStart.y;
+      let newW = resizeStart.w;
+      let newH = resizeStart.h;
+      let newX = sig.x;
+      let newY = sig.y;
+
+      if (resizeCorner.includes('r')) newW = Math.max(40, resizeStart.w + dx);
+      if (resizeCorner.includes('l')) { newW = Math.max(40, resizeStart.w - dx); newX = sig.x + (resizeStart.w - newW); }
+      if (resizeCorner.includes('b')) newH = Math.max(20, resizeStart.h + dy);
+      if (resizeCorner.includes('t')) { newH = Math.max(20, resizeStart.h - dy); newY = sig.y + (resizeStart.h - newH); }
+
+      setSignatures(signatures.map((s) => s.id === resizingSignature ? { ...s, x: newX, y: newY, width: newW, height: newH } : s));
+    }
   };
 
   const handlePointerUp = (e?: React.PointerEvent) => {
     setDraggingSignature(null);
+    setResizingSignature(null);
+    setResizeCorner(null);
     if (e && (e.target as Element).releasePointerCapture) {
-      try { (e.target as Element).releasePointerCapture((e as any).pointerId); } catch {}
+      (e.target as Element).releasePointerCapture(e.pointerId);
     }
   };
 
+  const handleResizeStart = (e: React.PointerEvent, sigId: string, corner: string) => {
+    e.stopPropagation();
+    if (!containerRef.current) return;
+    const sig = signatures.find(s => s.id === sigId);
+    if (!sig) return;
+    setResizingSignature(sigId);
+    setResizeCorner(corner);
+    setResizeStart({ x: e.clientX, y: e.clientY, w: sig.width, h: sig.height });
+    (e.target as Element).setPointerCapture(e.pointerId);
+  };
+
   const removeSignature = (sigId: string) => {
-    setSignatures(signatures.filter((sig) => sig.id !== sigId));
+    const newSigs = signatures.filter((sig) => sig.id !== sigId);
+    setSignatures(newSigs);
+    hapticLight();
     toast.success("Signature removed");
+    onSignaturePlaced?.(newSigs.length);
+  };
+
+  const handleDetectFields = async () => {
+    setOcrLoading(true);
+    try {
+      const fields = await detectSignatureFields(file, pageWidth, numPages || undefined);
+      setDetectedFields(fields);
+      if (fields.length > 0) {
+        toast.success(`Found ${fields.length} field(s) — click to place signature`);
+      } else {
+        toast.info('No signature fields detected');
+      }
+    } catch (error) {
+      console.error('OCR error:', error);
+      toast.error('Failed to detect fields');
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const handleFieldClick = (field: DetectedField) => {
+    if (!signature) {
+      toast.error('Please create a signature first');
+      return;
+    }
+    const newSignature: SignaturePlacement = {
+      id: `sig-${Date.now()}`,
+      x: field.x,
+      y: field.y,
+      width: Math.min(field.width, 200),
+      height: Math.min(field.height, 80),
+      page: field.page,
+    };
+    const next = [...signatures, newSignature];
+    setSignatures(next);
+    onSignaturePlaced?.(next.length);
+    toast.success(`Signature placed at "${field.label}"`);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, sigId: string) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      e.stopPropagation();
+      const sig = signatures.find(s => s.id === sigId);
+      if (!sig) return;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchRef.current = { sigId, dist: Math.sqrt(dx * dx + dy * dy), w: sig.width, h: sig.height };
+      setDraggingSignature(null);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchRef.current) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const scale = dist / pinchRef.current.dist;
+      const newW = Math.max(40, Math.round(pinchRef.current.w * scale));
+      const newH = Math.max(20, Math.round(pinchRef.current.h * scale));
+      setSignatures(sigs =>
+        sigs.map(s => s.id === pinchRef.current?.sigId ? { ...s, width: newW, height: newH } : s)
+      );
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (pinchRef.current) {
+      hapticLight();
+      pinchRef.current = null;
+    }
+  };
+
+  const handleVoiceAttach = (sigId: string, blobUrl: string, duration: number) => {
+    setAttachedVoices(prev => ({ ...prev, [sigId]: { blobUrl, duration } }));
+    hapticLight();
+  };
+
+  const handleVoiceDetach = (sigId: string) => {
+    setAttachedVoices(prev => {
+      const next = { ...prev };
+      delete next[sigId];
+      return next;
+    });
   };
 
   const downloadSignedDocument = async () => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !signature || signatures.length === 0) return;
 
+    let toastId: string | number | undefined;
     try {
-      toast.loading("Generating signed document...");
-      // Temporarily update live DOM styles to hide UI and remove borders so
-      // html2canvas captures the actual rendered PDF content and signatures.
-      const src = containerRef.current! as HTMLElement;
-      const original = {
-        background: src.style.background,
-        border: src.style.border,
-        borderRadius: src.style.borderRadius,
-        overflow: src.style.overflow,
-      };
-
-      const hiddenButtons: Array<{ el: HTMLElement; display: string }> = [];
-      src.querySelectorAll('button').forEach((b) => {
-        const be = b as HTMLElement;
-        hiddenButtons.push({ el: be, display: be.style.display });
-        be.style.display = 'none';
-      });
-
-      const hiddenToolbars: Array<{ el: HTMLElement; display: string }> = [];
-      src.querySelectorAll('[role="toolbar"]').forEach((el) => {
-        const ee = el as HTMLElement;
-        hiddenToolbars.push({ el: ee, display: ee.style.display });
-        ee.style.display = 'none';
-      });
-
-      const imgStyles: Array<{ el: HTMLImageElement; border: string; background: string; boxShadow: string }> = [];
-      src.querySelectorAll('img').forEach((img) => {
-        const ie = img as HTMLImageElement;
-        imgStyles.push({ el: ie, border: ie.style.border, background: ie.style.background, boxShadow: ie.style.boxShadow });
-        ie.style.border = 'none';
-        ie.style.background = 'transparent';
-        ie.style.boxShadow = 'none';
-      });
-
-      // Apply container styles for export
-      src.style.background = '#ffffff';
-      src.style.border = 'none';
-      src.style.borderRadius = '0';
-      src.style.overflow = 'visible';
-
-      // Render canvas from live DOM
-      const canvas = await html2canvas(src, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        allowTaint: false,
-      });
-
-      // Restore original styles
-      src.style.background = original.background;
-      src.style.border = original.border;
-      src.style.borderRadius = original.borderRadius;
-      src.style.overflow = original.overflow;
-
-      hiddenButtons.forEach(({ el, display }) => (el.style.display = display));
-      hiddenToolbars.forEach(({ el, display }) => (el.style.display = display));
-      imgStyles.forEach(({ el, border, background, boxShadow }) => {
-        el.style.border = border;
-        el.style.background = background;
-        el.style.boxShadow = boxShadow;
-      });
+      toastId = toast.loading("Generating signed document...");
 
       const isNative = Capacitor.isNativePlatform();
       const fileName = `signed-${file.name.replace(/\.[^/.]+$/, "")}`;
 
       if (isImage) {
-        // For images, convert canvas to base64
-        canvas.toBlob(async (blob) => {
-          if (!blob) {
-            toast.error("Failed to generate image");
-            return;
-          }
-
-          if (isNative) {
-            try {
-              // Convert blob to base64
-              const base64Data = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  const base64String = reader.result as string;
-                  // Remove data URL prefix (data:image/png;base64,)
-                  const base64Data = base64String.split(',')[1];
-                  resolve(base64Data);
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-
-              const fileExtension = file.name.split('.').pop() || 'png';
-              const fileNameWithExt = `${fileName}.${fileExtension}`;
-
-              // Save to Documents directory
-              const result = await Filesystem.writeFile({
-                path: fileNameWithExt,
-                data: base64Data,
-                directory: Directory.Documents,
-                encoding: Encoding.UTF8,
-              });
-
-              const filePath = result.uri;
-              
-              // Show success with file path
-              toast.success(`Document saved to Documents folder!\nPath: ${filePath}`, {
-                duration: 8000,
-              });
-            } catch (error) {
-              console.error("Filesystem error:", error);
-              toast.error(`Failed to save file: ${error}`);
-            }
-          } else {
-            // Browser fallback
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `signed-${file.name}`;
-            link.click();
-            URL.revokeObjectURL(url);
-            toast.success('Document downloaded!');
-          }
-        }, file.type || 'image/png');
-      } else {
-        // For PDFs, create a new PDF with signatures
-        const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
-        const imgData = canvas.toDataURL('image/png');
-        const pageWidth = 210; // A4 width in mm
-        const imgWidth = pageWidth;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-        
-        if (isNative) {
-          try {
-            // Convert PDF to base64
-            const pdfBlob = pdf.output('blob');
-            const base64Data = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64String = reader.result as string;
-                // Remove data URL prefix
-                const base64Data = base64String.split(',')[1];
-                resolve(base64Data);
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(pdfBlob);
-            });
-
-            const fileNameWithExt = `${fileName}.pdf`;
-
-            // Save to Documents directory
-            const result = await Filesystem.writeFile({
-              path: fileNameWithExt,
-              data: base64Data,
-              directory: Directory.Documents,
-              encoding: Encoding.UTF8,
-            });
-
-            const filePath = result.uri;
-            
-            // Show success with file path
-            toast.success(`Document saved to Documents folder!\nPath: ${filePath}`, {
-              duration: 8000,
-            });
-          } catch (error) {
-            console.error("Filesystem error:", error);
-            toast.error(`Failed to save file: ${error}`);
-          }
-        } else {
-          // Browser fallback
-          pdf.save(`${fileName}.pdf`);
-          toast.success('Document downloaded!');
+        const imgEl = containerRef.current.querySelector('img');
+        if (!imgEl) {
+          toast.error("Could not find document image");
+          return;
         }
+
+        const displayedWidth = imgEl.clientWidth;
+        const displayedHeight = imgEl.clientHeight;
+
+        const blob = await composeSignedImage(
+          file,
+          signature,
+          signatures,
+          displayedWidth,
+          displayedHeight
+        );
+
+        if (isNative) {
+          const base64Data = await blobToBase64(blob);
+          const result = await Filesystem.writeFile({
+            path: `${fileName}.png`,
+            data: base64Data,
+            directory: Directory.Documents,
+          });
+          toast.success(`Document saved to Documents folder!\nPath: ${result.uri}`, { id: toastId, duration: 8000 });
+        } else {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${fileName}.png`;
+          link.click();
+          URL.revokeObjectURL(url);
+          toast.success('Document downloaded!', { id: toastId });
+        }
+        if (user?.id) saveDocumentRecord(user.id, file.name, 1, signatures.length);
+      } else {
+        const response = await fetch(fileUrl);
+        const pdfBytes = await response.arrayBuffer();
+
+        const signedPdfBytes = await embedSignaturesIntoPDF(
+          pdfBytes,
+          signature,
+          signatures,
+          pageWidth
+        );
+
+        const docHash = await hashDocument(file);
+        const certificate = await generateCertificate({
+          documentName: file.name,
+          documentHash: docHash,
+          signatures: signatures.map(s => ({
+            id: s.id,
+            page: s.page,
+            x: s.x,
+            y: s.y,
+            width: s.width,
+            height: s.height,
+            placedAt: Date.now(),
+          })),
+          signedAt: Date.now(),
+        });
+        const finalPdfBytes = await appendCertificateToDocument(signedPdfBytes, certificate);
+
+        if (isNative) {
+          const base64Data = arrayBufferToBase64(finalPdfBytes);
+          const result = await Filesystem.writeFile({
+            path: `${fileName}.pdf`,
+            data: base64Data,
+            directory: Directory.Documents,
+          });
+          toast.success(`Document saved to Documents folder!\nPath: ${result.uri}`, { id: toastId, duration: 8000 });
+        } else {
+          const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${fileName}.pdf`;
+          link.click();
+          URL.revokeObjectURL(url);
+          toast.success('Document downloaded!', { id: toastId });
+        }
+        if (user?.id) saveDocumentRecord(user.id, file.name, numPages || 1, signatures.length);
       }
     } catch (error) {
       console.error("Download error:", error);
-      toast.error("Failed to download document");
+      toast.error("Failed to download document", { id: toastId });
     }
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-6 space-y-4">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="w-full max-w-4xl mx-auto p-6 space-y-4"
+    >
       <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={onBack}>
-          <ChevronLeft className="w-4 h-4 mr-2" />
+        <Button variant="ghost" onClick={onBack} className="hover:bg-card">
+          <ChevronLeft className="w-4 h-4 mr-1" />
           Back
         </Button>
-        <h2 className="text-xl font-bold text-foreground">{file.name}</h2>
-        <Button onClick={downloadSignedDocument} className="bg-primary hover:bg-primary-hover">
-          <Download className="w-4 h-4 mr-2" />
-          Save
-        </Button>
+        <h2 className="text-lg font-semibold text-foreground truncate max-w-[200px] sm:max-w-md">{file.name}</h2>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={async () => {
+              const blob = new Blob([await fetch(fileUrl).then(r => r.arrayBuffer())], { type: file.type });
+              await shareDocument(blob, file.name);
+            }}
+            className="hover:bg-card"
+          >
+            <Share2 className="w-4 h-4" />
+          </Button>
+          <Button
+            onClick={downloadSignedDocument}
+            disabled={signatures.length === 0}
+            className="bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-soft hover:shadow-medium"
+          >
+            <Download className="w-4 h-4 mr-1.5" />
+            Save
+          </Button>
+        </div>
       </div>
 
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-4">
+      <Card className="p-4 bg-card/50 backdrop-blur-sm border border-border shadow-soft">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           {!isImage && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-secondary/50 rounded-xl px-2 py-1">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
+                className="h-8 w-8 p-0"
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {numPages}
+              <span className="text-sm text-muted-foreground min-w-[60px] text-center font-mono">
+                {currentPage} / {numPages}
               </span>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
                 disabled={currentPage === numPages}
+                className="h-8 w-8 p-0"
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           )}
-          <Button onClick={addSignature} disabled={!signature}>
-            Add Signature
-          </Button>
+          <div className="flex items-center gap-2">
+            {!isImage && numPages > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDetectFields}
+                disabled={ocrLoading}
+                className="text-xs border-primary/30 hover:border-primary/60"
+              >
+                <ScanLine className="w-3.5 h-3.5 mr-1" />
+                {ocrLoading ? 'Detecting...' : 'Auto-detect'}
+              </Button>
+            )}
+            <Button onClick={addSignature} disabled={!signature} size="sm" className="bg-primary/90">
+              <Signature className="w-3.5 h-3.5 mr-1" />
+              Add
+            </Button>
+          </div>
         </div>
+
+        {savedSignatures && savedSignatures.length > 1 && (
+          <div className="flex items-center gap-2 mb-4 pb-2 overflow-x-auto">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Active:</span>
+            {savedSignatures.map((saved) => (
+              <button
+                key={saved.id}
+                onClick={() => onSignatureChange?.(saved.dataUrl)}
+                className={`relative flex-shrink-0 w-20 h-10 rounded-lg border-2 transition-all p-0.5 flex items-center justify-center ${
+                  signature === saved.dataUrl
+                    ? 'border-primary bg-primary/5 shadow-glow'
+                    : 'border-border hover:border-primary/50 bg-card/50'
+                }`}
+              >
+                <img
+                  src={saved.dataUrl}
+                  alt={saved.label}
+                  className="max-w-full max-h-full object-contain"
+                  draggable={false}
+                />
+                {signature === saved.dataUrl && (
+                  <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-primary rounded-full flex items-center justify-center shadow-glow">
+                    <Check className="w-2.5 h-2.5 text-primary-foreground" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div
           ref={containerRef}
-          className="relative bg-accent/30 rounded-lg overflow-hidden"
+          className="relative bg-accent/20 rounded-xl overflow-hidden border border-border/50"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -400,12 +510,34 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
             </Document>
           )}
 
-      {signatures
+          {detectedFields
+            .filter((f) => isImage || f.page === currentPage)
+            .map((field) => (
+              <div
+                key={`field-${field.page}-${Math.round(field.x)}-${Math.round(field.y)}`}
+                className="absolute border-2 border-dashed border-blue-400/60 rounded-lg cursor-pointer hover:bg-blue-400/10 transition-colors flex items-center justify-center group"
+                style={{
+                  left: field.x,
+                  top: field.y,
+                  width: field.width,
+                  height: field.height,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleFieldClick(field);
+                }}
+              >
+                <span className="text-[10px] text-blue-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 px-1 rounded whitespace-nowrap">
+                  {field.label}
+                </span>
+              </div>
+            ))}
+          {signatures
             .filter((sig) => isImage || sig.page === currentPage)
             .map((sig) => (
               <div
                 key={sig.id}
-                className="absolute group"
+                className="absolute group touch-none"
                 style={{
                   left: sig.x,
                   top: sig.y,
@@ -415,28 +547,66 @@ export const DocumentViewer = ({ file, signature, onBack, onSignaturePlaced }: D
                 onPointerDown={(e) => handlePointerDown(e, sig.id)}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
+                onTouchStart={(e) => handleTouchStart(e, sig.id)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
               >
                 <img
                   src={signature}
                   alt="Signature"
-                  className="w-full h-full object-contain bg-background/90"
+                  className="w-full h-full object-contain bg-background/90 rounded pointer-events-none"
                   draggable={false}
                 />
                 <button
-                  onClick={() => { 
-                    const newSigs = signatures.filter((s) => s.id !== sig.id);
-                    setSignatures(newSigs);
-                    toast.success("Signature removed");
-                    onSignaturePlaced?.(newSigs.length);
-                  }}
-                  className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  onClick={() => removeSignature(sig.id)}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center z-10 shadow-md hover:scale-110"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
+                <div className="absolute -bottom-7 right-0 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <VoiceAnnotation
+                    signatureId={sig.id}
+                    onAttach={handleVoiceAttach}
+                    onDetach={handleVoiceDetach}
+                    attachedVoice={attachedVoices[sig.id] || null}
+                  />
+                </div>
               </div>
             ))}
+
+          {!isImage && numPages > 1 && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-background/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-border/50">
+              {Array.from({ length: numPages }, (_, i) => i + 1).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                    p === currentPage
+                      ? 'bg-primary scale-125 shadow-glow'
+                      : signatures.some(s => s.page === p)
+                        ? 'bg-primary/50'
+                        : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                  }`}
+                  title={`Page ${p}${signatures.some(s => s.page === p) ? ' (has signatures)' : ''}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </Card>
-    </div>
+    </motion.div>
   );
 };
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer();
+  return arrayBufferToBase64(new Uint8Array(buffer));
+}
+
+function arrayBufferToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}

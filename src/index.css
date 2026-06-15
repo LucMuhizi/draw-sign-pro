@@ -2,102 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 35 15% 96%;
-    --foreground: 240 10% 15%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 15%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 15%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 250 75% 65%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 250 75% 60%;
+    --primary-hover: 217 91% 55%;
 
-    --secondary: 35 20% 88%;
-    --secondary-foreground: 240 10% 15%;
+    --secondary: 199 89% 48%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 35 15% 92%;
-    --muted-foreground: 240 5% 45%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 250 65% 95%;
-    --accent-foreground: 250 75% 65%;
+    --accent: 25 95% 53%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 35 10% 88%;
-    --input: 35 10% 88%;
-    --ring: 250 75% 65%;
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
 
-    --radius: 1rem;
-    
-    --gradient-primary: linear-gradient(135deg, hsl(250 75% 65%), hsl(260 70% 70%));
-    --shadow-soft: 0 4px 20px -4px hsl(250 75% 65% / 0.15);
-    --shadow-medium: 0 8px 30px -6px hsl(250 75% 65% / 0.25);
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.75rem;
+
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(199 89% 48%));
+    --gradient-accent: linear-gradient(135deg, hsl(25 95% 53%), hsl(38 92% 50%));
+    --shadow-soft: 0 4px 24px -4px hsl(217 91% 60% / 0.18);
+    --shadow-medium: 0 8px 32px -6px hsl(217 91% 60% / 0.28);
+    --shadow-glow: 0 0 24px hsl(217 91% 60% / 0.35);
+    --shadow-accent: 0 4px 24px -4px hsl(25 95% 53% / 0.25);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 217 91% 60%;
   }
 
   .dark {
-    --background: 240 15% 8%;
-    --foreground: 35 15% 96%;
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
 
-    --card: 240 12% 12%;
-    --card-foreground: 35 15% 96%;
+    --card: 222 30% 12%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 240 12% 12%;
-    --popover-foreground: 35 15% 96%;
+    --popover: 222 30% 12%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 250 75% 65%;
+    --primary: 217 91% 65%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 250 75% 70%;
+    --primary-hover: 217 91% 70%;
 
-    --secondary: 240 10% 18%;
-    --secondary-foreground: 35 15% 96%;
+    --secondary: 199 89% 52%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 240 10% 16%;
-    --muted-foreground: 240 5% 55%;
+    --muted: 222 20% 18%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 250 65% 20%;
-    --accent-foreground: 250 75% 75%;
+    --accent: 25 95% 58%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 50%;
+    --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 10% 20%;
-    --input: 240 10% 20%;
-    --ring: 250 75% 65%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --border: 222 20% 20%;
+    --input: 222 20% 20%;
+    --ring: 217 91% 65%;
+
+    --sidebar-background: 222 40% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217 91% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 222 20% 15%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 20% 20%;
+    --sidebar-ring: 217 91% 65%;
   }
 }
 
@@ -108,5 +104,71 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% -10%, hsl(217 91% 60% / 0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 110%, hsl(199 89% 48% / 0.10) 0%, transparent 50%),
+      radial-gradient(ellipse 40% 30% at 50% 50%, hsl(25 95% 53% / 0.04) 0%, transparent 40%);
+  }
+
+  .bg-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(100px);
+    opacity: 0.4;
+    pointer-events: none;
+    animation: orb-float 10s ease-in-out infinite;
+  }
+
+  .bg-orb-1 {
+    width: 500px;
+    height: 500px;
+    background: hsl(217 91% 60%);
+    top: -15%;
+    left: -10%;
+    animation-delay: 0s;
+  }
+
+  .bg-orb-2 {
+    width: 400px;
+    height: 400px;
+    background: hsl(199 89% 48%);
+    bottom: -10%;
+    right: -10%;
+    animation-delay: -5s;
+  }
+
+  .bg-orb-3 {
+    width: 300px;
+    height: 300px;
+    background: hsl(25 95% 53%);
+    top: 40%;
+    left: 60%;
+    animation-delay: -3s;
+    opacity: 0.2;
+  }
+
+  @keyframes orb-float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    25% { transform: translate(30px, -20px) scale(1.05); }
+    50% { transform: translate(-20px, 30px) scale(0.95); }
+    75% { transform: translate(20px, 20px) scale(1.02); }
+  }
+
+  @keyframes marching-ants {
+    0% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: -24; }
+  }
+
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  @media (pointer: coarse) {
+    body.keyboard-open {
+      padding-bottom: var(--keyboard-height, 0px);
+      transition: padding-bottom 0.3s ease;
+    }
   }
 }
