@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "app.lovable.f2f1a939c2fa48c7959d8758351cf789"
+    namespace "com.signdocu.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.lovable.f2f1a939c2fa48c7959d8758351cf789"
+        applicationId "com.signdocu.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

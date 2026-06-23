@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { BottomSheet } from "@/components/BottomSheet";
 import { RotateCw, RotateCcw, Check, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 
 interface ImageCropDialogProps {
   imageUrl: string;
@@ -86,17 +85,13 @@ export const ImageCropDialog = ({ imageUrl, onConfirm, onCancel }: ImageCropDial
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
     const img = imgRef.current;
     if (!img) return;
-
     const maxDim = 1600;
     const finalW = Math.min(crop.w, maxDim);
     const finalH = Math.min(crop.h, maxDim);
-
     canvas.width = finalW;
     canvas.height = finalH;
-
     ctx.save();
     if (rotation) {
       ctx.translate(finalW / 2, finalH / 2);
@@ -105,7 +100,6 @@ export const ImageCropDialog = ({ imageUrl, onConfirm, onCancel }: ImageCropDial
     }
     ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, 0, 0, finalW, finalH);
     ctx.restore();
-
     canvas.toBlob((blob) => {
       if (blob) onConfirm(blob);
     }, 'image/jpeg', 0.92);
@@ -116,77 +110,67 @@ export const ImageCropDialog = ({ imageUrl, onConfirm, onCancel }: ImageCropDial
   const scale = displayW / imgSize.w;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    <>
+      <BottomSheet
+        open={true}
+        onOpenChange={onCancel}
+        title="Crop Document"
+        hideClose
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="w-full max-w-lg"
+        <div className="flex justify-end mb-3">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => handleRotate(-1)} className="h-8 w-8 p-0 rounded-xl">
+              <RotateCcw className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => handleRotate(1)} className="h-8 w-8 p-0 rounded-xl">
+              <RotateCw className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div
+          ref={containerRef}
+          className="relative overflow-hidden rounded-xl bg-muted mx-auto"
+          style={{ width: displayW, height: displayH }}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleMouseDown}
         >
-          <Card className="p-4 bg-white/95 backdrop-blur-xl border border-border/50 shadow-xl rounded-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-foreground">Crop Document</h3>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => handleRotate(-1)} className="h-8 w-8 p-0 rounded-xl">
-                  <RotateCcw className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => handleRotate(1)} className="h-8 w-8 p-0 rounded-xl">
-                  <RotateCw className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
+          <img
+            ref={imgRef}
+            src={imageUrl}
+            alt="Crop preview"
+            className="absolute"
+            style={{
+              width: displayW,
+              height: displayH,
+              transform: `rotate(${rotation}deg)`,
+              objectFit: 'cover',
+            }}
+            draggable={false}
+          />
+          <div
+            className="absolute border-2 border-primary bg-primary/10 cursor-move"
+            style={{
+              left: crop.x * scale,
+              top: crop.y * scale,
+              width: crop.w * scale,
+              height: crop.h * scale,
+            }}
+          />
+        </div>
 
-            <div
-              ref={containerRef}
-              className="relative overflow-hidden rounded-xl bg-black/10 mx-auto"
-              style={{ width: displayW, height: displayH }}
-              onMouseDown={handleMouseDown}
-              onTouchStart={handleMouseDown}
-            >
-              <img
-                ref={imgRef}
-                src={imageUrl}
-                alt="Crop preview"
-                className="absolute"
-                style={{
-                  width: displayW,
-                  height: displayH,
-                  transform: `rotate(${rotation}deg)`,
-                  objectFit: 'cover',
-                }}
-                draggable={false}
-              />
-              <div
-                className="absolute border-2 border-primary bg-primary/10 cursor-move"
-                style={{
-                  left: crop.x * scale,
-                  top: crop.y * scale,
-                  width: crop.w * scale,
-                  height: crop.h * scale,
-                }}
-              />
-            </div>
-
-            <div className="flex gap-3 mt-4">
-              <Button variant="outline" onClick={onCancel} className="flex-1 rounded-xl">
-                <X className="w-4 h-4 mr-1" />
-                Cancel
-              </Button>
-              <Button onClick={handleConfirm} className="flex-1 bg-gradient-to-r from-primary to-secondary text-white rounded-xl">
-                <Check className="w-4 h-4 mr-1" />
-                Confirm
-              </Button>
-            </div>
-          </Card>
-        </motion.div>
-      </motion.div>
+        <div className="flex gap-3 mt-4">
+          <Button variant="outline" onClick={onCancel} className="flex-1 rounded-xl">
+            <X className="w-4 h-4 mr-1" />
+            Cancel
+          </Button>
+          <Button onClick={handleConfirm} className="flex-1 bg-gradient-to-r from-primary to-secondary text-white rounded-xl">
+            <Check className="w-4 h-4 mr-1" />
+            Confirm
+          </Button>
+        </div>
+      </BottomSheet>
       <canvas ref={canvasRef} className="hidden" />
-    </AnimatePresence>
+    </>
   );
 };

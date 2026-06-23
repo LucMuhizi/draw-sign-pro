@@ -4,17 +4,23 @@ FROM ubuntu:22.04
 # Avoid interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies
+# Install dependencies (no apt JDK — we use Temurin tarball for reliability)
 RUN apt-get update && apt-get install -y \
-    openjdk-17-jdk \
     wget \
     unzip \
     git \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Java environment
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+# Install Eclipse Temurin JDK 21 (required by Capacitor's jvmToolchain spec)
+ENV JAVA_HOME=/opt/jdk-21
+RUN mkdir -p $JAVA_HOME && \
+    wget -q "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jdk_x64_linux_hotspot_21.0.5_11.tar.gz" -O /tmp/jdk21.tgz && \
+    tar -xzf /tmp/jdk21.tgz -C $JAVA_HOME --strip-components=1 && \
+    rm /tmp/jdk21.tgz && \
+    $JAVA_HOME/bin/java -version
+
 ENV PATH=$PATH:$JAVA_HOME/bin
 
 # Install Android SDK

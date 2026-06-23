@@ -1,13 +1,15 @@
 import { useState, useCallback } from "react";
-import { Upload, FileUp, CheckCircle2, Camera } from "lucide-react";
+import { Upload, FileUp, CheckCircle2, Camera, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { scanDocument, isCameraAvailable } from "@/lib/cameraScan";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
+import { DocumentScanner } from "@/components/DocumentScanner";
 import { Capacitor } from "@capacitor/core";
 import { CameraResultType, CameraSource } from "@capacitor/camera";
+import { isDocxFile } from "@/lib/docxConverter";
 
 interface DocumentUploadProps {
   onFileSelect?: (file: File) => void;
@@ -18,6 +20,7 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [showCrop, setShowCrop] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -50,10 +53,10 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
         const file = files[0];
-        if (file.type.startsWith("image/") || file.type === "application/pdf") {
+        if (file.type.startsWith("image/") || file.type === "application/pdf" || isDocxFile(file)) {
           processFile(file);
         } else {
-          toast.error("Please upload a PDF or image file");
+          toast.error("Please upload a PDF, image, or Word document");
         }
       }
     },
@@ -107,6 +110,15 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
     }
   };
 
+  const handleSmartScan = () => {
+    setShowScanner(true);
+  };
+
+  const handleScanComplete = (file: File) => {
+    setShowScanner(false);
+    processFile(file);
+  };
+
   const handleCropConfirm = (croppedBlob: Blob) => {
     const file = new File([croppedBlob], `scan-${Date.now()}.jpg`, { type: 'image/jpeg' });
     setCapturedImage(null);
@@ -145,11 +157,25 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
           className="flex-1"
         >
           <Button
+            onClick={handleSmartScan}
+            className="w-full bg-gradient-to-r from-primary to-secondary text-white shadow-soft hover:shadow-glow transition-all h-12 rounded-xl font-semibold"
+          >
+            <ScanLine className="w-5 h-5 mr-2" />
+            Smart Scan
+          </Button>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18, type: "spring", stiffness: 300, damping: 25 }}
+          className="flex-1"
+        >
+          <Button
             onClick={handleScanDocument}
             className="w-full bg-gradient-to-r from-secondary to-accent text-white shadow-soft hover:shadow-glow transition-all h-12 rounded-xl font-semibold"
           >
             <Camera className="w-5 h-5 mr-2" />
-            Scan Document
+            Quick Photo
           </Button>
         </motion.div>
       </div>
@@ -234,7 +260,7 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
                 exit={{ opacity: 0 }}
                 className="text-sm text-muted-foreground"
               >
-                {isDragging ? "Drop your file here" : "PDF, JPEG, PNG, WebP"}
+                {isDragging ? "Drop your file here" : "PDF, Word, JPEG, PNG, WebP"}
               </motion.div>
             )}
           </AnimatePresence>
@@ -242,7 +268,7 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
           <input
             type="file"
             id="file-upload"
-            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,image/*"
+            accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,image/*"
             onChange={handleFileInput}
             className="hidden"
           />
@@ -261,6 +287,13 @@ export const DocumentUpload = ({ onFileSelect }: DocumentUploadProps) => {
           imageUrl={capturedImage}
           onConfirm={handleCropConfirm}
           onCancel={handleCropCancel}
+        />
+      )}
+
+      {showScanner && (
+        <DocumentScanner
+          onScanComplete={handleScanComplete}
+          onCancel={() => setShowScanner(false)}
         />
       )}
     </motion.div>

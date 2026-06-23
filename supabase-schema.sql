@@ -45,6 +45,59 @@ create policy "Users can insert own documents"
   on documents for insert
   with check (auth.uid() = user_id);
 
+-- 3. Signing sessions (multi-party)
+create table if not exists signing_sessions (
+  id uuid default gen_random_uuid() primary key,
+  document_name text not null,
+  document_storage_path text,
+  document_hash text not null,
+  status text default 'pending' check (status in ('pending','in_progress','completed','expired')),
+  created_by uuid references auth.users(id) on delete cascade not null,
+  created_at timestamptz default now(),
+  completed_at timestamptz,
+  share_token text unique not null default gen_random_uuid()::text
+);
+
+alter table signing_sessions enable row level security;
+
+create policy "Creator can manage sessions"
+  on signing_sessions for all
+  using (auth.uid() = created_by);
+
+create policy "Anyone can view session by token"
+  on signing_sessions for select
+  using (true);
+
+-- 4. Signing participants
+create table if not exists signing_participants (
+  id uuid default gen_random_uuid() primary key,
+  session_id uuid references signing_sessions(id) on delete cascade not null,
+  email text not null,
+  name text not null default '',
+  color text not null default '#3b82f6',
+  role text default 'signer' check (role in ('sender','signer','viewer')),
+  status text default 'pending' check (status in ('pending','viewed','signed','declined')),
+  fields jsonb not null default '[]',
+  signed_at timestamptz,
+  created_at timestamptz default now()
+);
+
+alter table signing_participants enable row level security;
+
+create policy "Session creator can manage participants"
+  on signing_participants for all
+  using (
+    exists (
+      select 1 from signing_sessions s
+      where s.id = signing_participants.session_id
+      and s.created_by = auth.uid()
+    )
+  );
+
+create policy "Anyone can view participants by session"
+  on signing_participants for select
+  using (true);
+
 -- 3. Storage bucket for signed documents
 insert into storage.buckets (id, name, public)
 values ('signed-documents', 'signed-documents', false)

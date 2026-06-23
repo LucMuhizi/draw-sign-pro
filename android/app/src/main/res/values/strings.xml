@@ -2,6 +2,13 @@
 <resources>
     <string name="app_name">SignDocu</string>
     <string name="title_activity_main">SignDocu</string>
-    <string name="package_name">app.lovable.f2f1a939c2fa48c7959d8758351cf789</string>
-    <string name="custom_url_scheme">app.lovable.f2f1a939c2fa48c7959d8758351cf789</string>
+    <string name="package_name">com.signdocu.app</string>
+    <string name="custom_url_scheme">com.signdocu.app</string>
+    <string name="shortcut_sign_new_short">Sign New</string>
+    <string name="shortcut_sign_new_long">Start signing a new document</string>
+    <string name="shortcut_sign_new_disabled">Sign in to use</string>
+    <string name="shortcut_open_last_short">Open Last</string>
+    <string name="shortcut_open_last_long">Open last signed document</string>
+    <string name="shortcut_camera_scan_short">Camera Scan</string>
+    <string name="shortcut_camera_scan_long">Scan a document with camera</string>
 </resources>

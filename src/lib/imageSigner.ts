@@ -1,6 +1,7 @@
-import type { SignaturePlacement } from './pdfSigner';
+import type { SignaturePlacement, FieldType } from './pdfSigner';
+import { formatDate } from './utils';
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -14,7 +15,7 @@ export async function composeSignedImage(
   signatureDataUrl: string,
   placements: SignaturePlacement[],
   displayedWidth: number,
-  displayedHeight: number
+  displayedHeight: number,
 ): Promise<Blob> {
   const img = await loadImage(URL.createObjectURL(imageFile));
   const naturalWidth = img.naturalWidth;
@@ -30,23 +31,78 @@ export async function composeSignedImage(
 
   ctx.drawImage(img, 0, 0);
 
-  const sigImg = await loadImage(signatureDataUrl);
+  const sigImg = placements.some(p => (p.fieldType || 'signature') === 'signature')
+    ? await loadImage(signatureDataUrl)
+    : null;
 
   for (const p of placements) {
     const natX = p.x * scaleX;
     const natY = p.y * scaleY;
     const natW = p.width * scaleX;
     const natH = p.height * scaleY;
-    ctx.drawImage(sigImg, natX, natY, natW, natH);
+    const fieldType: FieldType = p.fieldType || 'signature';
+
+    switch (fieldType) {
+      case 'signature': {
+        if (sigImg) ctx.drawImage(sigImg, natX, natY, natW, natH);
+        break;
+      }
+      case 'typed': {
+        const text = p.typedText || '';
+        const fontSize = Math.min(natH * 0.45, 28);
+        ctx.font = `${fontSize}px serif`;
+        ctx.fillStyle = '#1a1a1a';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, natX + natW / 2, natY + natH / 2);
+        break;
+      }
+      case 'date': {
+        const dateText = formatDate(p.dateFormat || 'MM/DD/YYYY');
+        const fontSize = Math.min(natH * 0.45, 18);
+        ctx.font = `${fontSize}px sans-serif`;
+        ctx.fillStyle = '#1a1a1a';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dateText, natX + natW / 2, natY + natH / 2);
+        break;
+      }
+      case 'initials': {
+        const text = (p.typedText || '').toUpperCase();
+        const fontSize = Math.min(natH * 0.5, 32);
+        ctx.font = `bold ${fontSize}px serif`;
+        ctx.fillStyle = '#1a1a1a';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, natX + natW / 2, natY + natH / 2);
+        break;
+      }
+      case 'checkbox': {
+        const size = Math.min(natW, natH, 24);
+        const cx = natX + natW / 2;
+        const cy = natY + natH / 2;
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cx - size / 2, cy - size / 2, size, size);
+        if (p.checked) {
+          ctx.font = `${size * 0.7}px sans-serif`;
+          ctx.fillStyle = '#1a1a1a';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('✓', cx, cy);
+        }
+        break;
+      }
+    }
   }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
         if (blob) resolve(blob);
-        else reject(new Error('Failed to create blob from canvas'));
+        else reject(new Error('Failed to create blob'));
       },
-      'image/png'
+      'image/png',
     );
   });
 }

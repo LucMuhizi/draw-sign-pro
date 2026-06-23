@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.example.app',
+  appId: 'com.signdocu.app',
   appName: 'SignDocu',
   webDir: 'dist',
   plugins: {
@@ -18,6 +18,9 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: "DEFAULT",
       backgroundColor: "#ffffff",
+    },
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
     },
   },
 };

@@ -1,87 +1,61 @@
-import { useRef, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import type { Mesh } from 'three';
-import * as THREE from 'three';
+import { useMemo } from "react";
 
-function Particles({ count = 60 }) {
-  const mesh = useRef<Mesh>(null);
-  const { positions, speeds, colors } = useMemo(() => {
-    const pos = new Float32Array(count * 3);
-    const spd = new Float32Array(count);
-    const col = new Float32Array(count * 3);
+const COLORS = [
+  "rgba(59,130,246,0.25)",
+  "rgba(6,182,212,0.2)",
+  "rgba(249,115,22,0.15)",
+  "rgba(99,102,241,0.2)",
+];
 
-    const palette = [
-      [0.23, 0.56, 0.96], // blue
-      [0.02, 0.71, 0.83], // cyan
-      [0.97, 0.45, 0.20], // orange
-      [0.40, 0.60, 0.95], // light blue
-    ];
-
-    for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 22;
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 22;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 12 - 4;
-      spd[i] = 0.015 + Math.random() * 0.02;
-
-      const c = palette[Math.floor(Math.random() * palette.length)];
-      col[i * 3] = c[0];
-      col[i * 3 + 1] = c[1];
-      col[i * 3 + 2] = c[2];
-    }
-    return { positions: pos, speeds: spd, colors: col };
-  }, [count]);
-
-  useFrame(({ clock }) => {
-    if (!mesh.current) return;
-    const pos = mesh.current.geometry.attributes.position.array as Float32Array;
-    const t = clock.getElapsedTime();
-    for (let i = 0; i < count; i++) {
-      pos[i * 3 + 1] += Math.sin(t * speeds[i] + i * 0.5) * 0.0012;
-      pos[i * 3] += Math.cos(t * speeds[i] * 0.6 + i * 0.3) * 0.0008;
-    }
-    mesh.current.geometry.attributes.position.needsUpdate = true;
-  });
-
-  return (
-    <points ref={mesh}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={count}
-          array={positions}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-color"
-          count={count}
-          array={colors}
-          itemSize={3}
-        />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.18}
-        vertexColors
-        transparent
-        opacity={0.5}
-        sizeAttenuation
-        blending={THREE.AdditiveBlending}
-        depthWrite={false}
-      />
-    </points>
-  );
+interface Particle {
+  key: number;
+  width: number;
+  height: number;
+  left: string;
+  top: string;
+  color: string;
+  delay: string;
+  duration: string;
 }
 
+/**
+ * Lightweight animated background using pure CSS.
+ * Replaces the Three.js particle system (~500KB) with CSS animations
+ * that work on all devices including low-RAM mobile phones.
+ */
 export function ParticleBackground() {
+  const particles = useMemo<Particle[]>(
+    () =>
+      Array.from({ length: 20 }).map((_, i) => ({
+        key: i,
+        width: 4 + Math.random() * 10,
+        height: 4 + Math.random() * 10,
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        delay: `${Math.random() * 8}s`,
+        duration: `${12 + Math.random() * 18}s`,
+      })),
+    [],
+  );
+
   return (
-    <div className="fixed inset-0 pointer-events-none z-0 select-none">
-      <Canvas
-        camera={{ position: [0, 0, 8], fov: 60 }}
-        dpr={[1, 1.5]}
-        gl={{ alpha: true, antialias: false }}
-        style={{ background: 'transparent' }}
-      >
-        <Particles count={70} />
-      </Canvas>
+    <div className="fixed inset-0 pointer-events-none z-0 select-none overflow-hidden">
+      {particles.map((p) => (
+        <div
+          key={p.key}
+          className="absolute rounded-full animate-float"
+          style={{
+            width: p.width,
+            height: p.height,
+            left: p.left,
+            top: p.top,
+            backgroundColor: p.color,
+            animationDelay: p.delay,
+            animationDuration: p.duration,
+          }}
+        />
+      ))}
     </div>
   );
 }

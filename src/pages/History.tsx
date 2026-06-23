@@ -8,6 +8,8 @@ import { getDocumentHistory, getDocumentDownloadUrl, deleteDocumentRecord, type 
 import { toast } from 'sonner';
 import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import { hapticLight, hapticHeavy, hapticSuccess } from '@/lib/haptics';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { SkeletonListItem } from '@/components/Skeleton';
 
 function SwipeableCard({
   record,
@@ -23,16 +25,14 @@ function SwipeableCard({
   index: number;
 }) {
   const x = useMotionValue(0);
-  const [swiped, setSwiped] = useState(false);
   const trashOpacity = useTransform(x, [-80, -40], [1, 0]);
   const showAlert = useTransform(x, [-120, -80], [1, 0]);
   const deleteThreshold = -120;
 
   const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.x < deleteThreshold) {
-      setSwiped(true);
       hapticHeavy();
-      onDelete(record.id);
+      setShowConfirm(true);
     } else {
       const anim = document.getElementById(`swipe-card-${record.id}`);
       if (anim) {
@@ -62,8 +62,6 @@ function SwipeableCard({
       longPressTimer.current = null;
     }
   }, []);
-
-  if (swiped) return null;
 
   return (
     <>
@@ -208,6 +206,19 @@ export default function History() {
     toast.success('Document record removed');
   };
 
+  const handleRefresh = useCallback(async () => {
+    if (!user) return;
+    const { data } = await getDocumentHistory(user.id);
+    setRecords(data);
+    hapticLight();
+    toast.success('History refreshed');
+  }, [user]);
+
+  const { containerProps, pullDistance, refreshing } = usePullToRefresh({
+    onRefresh: handleRefresh,
+    disabled: loading || records.length === 0,
+  });
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <div className="max-w-3xl mx-auto p-6 space-y-6">
@@ -233,10 +244,7 @@ export default function History() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1, type: "spring", stiffness: 300, damping: 25 }}
               >
-                <Card className="p-5 animate-pulse bg-white/60 backdrop-blur-xl border border-border/50">
-                  <div className="h-4 bg-muted rounded w-1/3 mb-3" />
-                  <div className="h-3 bg-muted rounded w-1/4" />
-                </Card>
+                <SkeletonListItem />
               </motion.div>
             ))}
           </div>
@@ -261,7 +269,13 @@ export default function History() {
             </Card>
           </motion.div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3" {...containerProps}>
+            {/* Pull-to-refresh indicator */}
+            {refreshing && (
+              <div className="flex justify-center py-2">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
             {records.map((record, i) => (
               <motion.div
                 key={record.id}
@@ -279,7 +293,7 @@ export default function History() {
               </motion.div>
             ))}
             <p className="text-center text-xs text-muted-foreground pt-2">
-              Swipe left to delete &middot; Long press for confirmation
+              Swipe left or long press to delete
             </p>
           </div>
         )}

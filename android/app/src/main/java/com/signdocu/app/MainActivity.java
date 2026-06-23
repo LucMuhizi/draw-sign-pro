@@ -1,4 +1,4 @@
-package app.lovable.f2f1a939c2fa48c7959d8758351cf789;
+package com.signdocu.app;
 
 import com.getcapacitor.BridgeActivity;
 

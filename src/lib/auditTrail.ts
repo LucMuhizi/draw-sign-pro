@@ -75,9 +75,16 @@ export async function generateCertificate(record: AuditRecord): Promise<Uint8Arr
   }
   drawLine();
 
-  drawText('This certificate verifies the integrity and authenticity', 9);
-  drawText('of the signed document. Any modification after signing', 9);
-  drawText('will invalidate the document hash.', 9);
+  drawText('This certificate provides a verifiable record of the', 9);
+  drawText('signing event. Any modification to the document after', 9);
+  drawText('signing will invalidate the document hash.', 9);
+  y -= 6;
+  drawText('IMPORTANT LEGAL NOTICE:', 10, true);
+  drawText('This certificate does NOT constitute a legally binding', 9);
+  drawText('digital signature under eIDAS, ESIGN Act, or UETA.', 9);
+  drawText('For legally binding electronic signatures, use a', 9);
+  drawText('qualified trust service provider (e.g., DocuSign,', 9);
+  drawText('Adobe Sign, or an eIDAS-certified provider).', 9);
 
   return await pdfDoc.save();
 }

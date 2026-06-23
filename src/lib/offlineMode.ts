@@ -1,9 +1,10 @@
 import { Capacitor } from '@capacitor/core';
+import { getItem, setItem, removeItem, getKeysByPrefix } from './storage';
 
 const CACHE_NAME = 'draw-sign-pro-docs';
 const CACHE_MAX_ITEMS = 5;
 const LAST_DOCS_KEY = 'draw-sign-pro-last-docs';
-const LAST_SIGS_KEY = 'draw-sign-pro-last-sigs';
+const SIG_PREFIX = 'draw-sign-pro-cached-sig';
 
 interface CachedDocument {
   id: string;
@@ -90,19 +91,32 @@ export function getCachedDocuments(): CachedDocument[] {
   return getLastDocs();
 }
 
-export function cacheSignatures(signatures: Array<{ id: string; dataUrl: string; label: string }>): void {
+/**
+ * Cache signatures to IndexedDB (handles large base64 data URLs).
+ */
+export async function cacheSignatures(signatures: Array<{ id: string; dataUrl: string; label: string }>): Promise<void> {
   try {
-    const toCache = signatures.map(function(s) { return { id: s.id, label: s.label, dataUrl: s.dataUrl }; });
-    localStorage.setItem(LAST_SIGS_KEY, JSON.stringify(toCache));
+    // Clear old cached sigs
+    const oldKeys = await getKeysByPrefix(SIG_PREFIX);
+    await Promise.all(oldKeys.map(k => removeItem(k)));
+
+    // Store each signature individually
+    await Promise.all(signatures.map(s =>
+      setItem(`${SIG_PREFIX}_${s.id}`, { id: s.id, label: s.label, dataUrl: s.dataUrl })
+    ));
   } catch {
-    // Storage full
+    // Storage failed
   }
 }
 
-export function getCachedSignatures(): { id: string; dataUrl: string; label: string }[] {
+/**
+ * Get cached signatures from IndexedDB.
+ */
+export async function getCachedSignatures(): Promise<{ id: string; dataUrl: string; label: string }[]> {
   try {
-    const data = localStorage.getItem(LAST_SIGS_KEY);
-    return data ? JSON.parse(data) : [];
+    const keys = await getKeysByPrefix(SIG_PREFIX);
+    const sigs = await Promise.all(keys.map(k => getItem<{ id: string; dataUrl: string; label: string }>(k)));
+    return sigs.filter(Boolean) as { id: string; dataUrl: string; label: string }[];
   } catch {
     return [];
   }
@@ -113,12 +127,15 @@ export async function clearOfflineCache(): Promise<void> {
     await caches.delete(CACHE_NAME);
   }
   localStorage.removeItem(LAST_DOCS_KEY);
-  localStorage.removeItem(LAST_SIGS_KEY);
+  // Clear IndexedDB cached signatures
+  const sigKeys = await getKeysByPrefix(SIG_PREFIX);
+  await Promise.all(sigKeys.map(k => removeItem(k)));
 }
 
-export function getCacheInfo(): { docs: number; sigs: number } {
+export async function getCacheInfo(): Promise<{ docs: number; sigs: number }> {
+  const sigKeys = await getKeysByPrefix(SIG_PREFIX);
   return {
     docs: getLastDocs().length,
-    sigs: getCachedSignatures().length,
+    sigs: sigKeys.length,
   };
 }

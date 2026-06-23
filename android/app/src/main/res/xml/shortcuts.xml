@@ -1,0 +1,42 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut
+    android:shortcutId="sign-new"
+    android:enabled="true"
+    android:icon="@mipmap/ic_launcher"
+    android:shortcutShortLabel="@string/shortcut_sign_new_short"
+    android:shortcutLongLabel="@string/shortcut_sign_new_long"
+    android:shortcutDisabledMessage="@string/shortcut_sign_new_disabled">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="${applicationId}"
+      android:targetClass="${applicationId}.MainActivity">
+      <extra android:name="action" android:value="sign-new" />
+    </intent>
+  </shortcut>
+  <shortcut
+    android:shortcutId="open-last"
+    android:enabled="true"
+    android:icon="@mipmap/ic_launcher"
+    android:shortcutShortLabel="@string/shortcut_open_last_short"
+    android:shortcutLongLabel="@string/shortcut_open_last_long">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="${applicationId}"
+      android:targetClass="${applicationId}.MainActivity">
+      <extra android:name="action" android:value="open-last" />
+    </intent>
+  </shortcut>
+  <shortcut
+    android:shortcutId="camera-scan"
+    android:enabled="true"
+    android:icon="@mipmap/ic_launcher"
+    android:shortcutShortLabel="@string/shortcut_camera_scan_short"
+    android:shortcutLongLabel="@string/shortcut_camera_scan_long">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="${applicationId}"
+      android:targetClass="${applicationId}.MainActivity">
+      <extra android:name="action" android:value="camera-scan" />
+    </intent>
+  </shortcut>
+</shortcuts>

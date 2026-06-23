@@ -17,7 +17,7 @@ export async function saveDocumentRecord(
   signatureCount: number,
   signedPdfBlob?: Blob,
 ): Promise<{ error: Error | null }> {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured) {
     return { error: new Error('Supabase not configured') };
   }
 
@@ -55,7 +55,7 @@ export async function saveDocumentRecord(
 }
 
 export async function getDocumentHistory(userId: string): Promise<{ data: DocumentRecord[]; error: Error | null }> {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured) {
     return { data: [], error: null };
   }
 
@@ -69,7 +69,7 @@ export async function getDocumentHistory(userId: string): Promise<{ data: Docume
 }
 
 export async function getDocumentDownloadUrl(storagePath: string): Promise<string | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
+  if (!isSupabaseConfigured) return null;
 
   const { data } = await supabase.storage
     .from('signed-documents')
@@ -79,7 +79,7 @@ export async function getDocumentDownloadUrl(storagePath: string): Promise<strin
 }
 
 export async function deleteDocumentRecord(id: string): Promise<{ error: Error | null }> {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured) {
     return { error: new Error('Supabase not configured') };
   }
 

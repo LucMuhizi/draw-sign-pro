@@ -8,11 +8,17 @@ import { AuthProvider } from "@/lib/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ParticleBackground } from "@/components/ParticleBackground";
 import { useEffect } from "react";
+import { setupPushListeners, cleanupPushListeners } from "@/lib/pushNotifications";
+import { startBackgroundSync, stopBackgroundSync } from "@/lib/syncQueue";
 import Index from "./pages/Index";
 import History from "./pages/History";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import NotFound from "./pages/NotFound";
+import SignRecipient from "./pages/SignRecipient";
+import Landing from "./pages/Landing";
+import { useAuth } from "@/lib/AuthContext";
+import { initPwaInstallListener } from "@/lib/pwaInstall";
 
 const queryClient = new QueryClient();
 
@@ -45,9 +51,38 @@ function MobileInit() {
       } catch {
         // Not running on native
       }
+      try {
+        await setupPushListeners(
+          (data) => {
+            if (data.documentId) {
+              window.dispatchEvent(new CustomEvent('notification-open', { detail: data }));
+            }
+          },
+        );
+      } catch {
+        // Push not supported
+      }
     })();
+    return () => { cleanupPushListeners(); stopBackgroundSync(); };
   }, []);
   return null;
+}
+
+function AppInit() {
+  useEffect(() => {
+    startBackgroundSync(async (action) => {
+      console.log('Processing sync action:', action.type, action.id);
+      return true;
+    });
+    const cleanupPwa = initPwaInstallListener();
+    return () => { stopBackgroundSync(); cleanupPwa(); };
+  }, []);
+  return null;
+}
+
+function HomeRoute() {
+  const { user } = useAuth();
+  return user ? <ProtectedRoute><Index /></ProtectedRoute> : <Landing />;
 }
 
 const App = () => (
@@ -58,6 +93,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <MobileInit />
+          <AppInit />
           <div className="bg-orb bg-orb-1" />
           <div className="bg-orb bg-orb-2" />
           <div className="bg-orb bg-orb-3" />
@@ -66,8 +102,10 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUp />} />
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/" element={<HomeRoute />} />
+              <Route path="/app" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+              <Route path="/sign/:sessionToken" element={<SignRecipient />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
