@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 800" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bgOrb" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2563eb" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bgOrbAccent" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="phoneInterior" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#eef2f7"/>
+    </linearGradient>
+    <filter id="phoneShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#0f172a" flood-opacity="0.18"/>
+    </filter>
+    <filter id="softShadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Backdrop -->
+  <rect width="900" height="800" fill="#f1f5f9"/>
+  <circle cx="780" cy="120" r="240" fill="url(#bgOrb)"/>
+  <circle cx="120" cy="700" r="220" fill="url(#bgOrbAccent)"/>
+  <circle cx="450" cy="780" r="180" fill="url(#bgOrbAccent)" opacity="0.6"/>
+
+  <!-- Title strip -->
+  <text x="30" y="34" font-size="11" font-weight="700" fill="#2563eb" letter-spacing="2">STEP 01 / 04 · UPLOAD</text>
+  <text x="30" y="58" font-size="22" font-weight="800" fill="#0f172a">Bring any document — PDF, Word, or photo</text>
+
+  <!-- Phone frame -->
+  <g transform="translate(60, 90)" filter="url(#phoneShadow)">
+    <rect width="380" height="680" rx="42" fill="#0f172a"/>
+    <rect x="6" y="6" width="368" height="668" rx="38" fill="url(#phoneInterior)"/>
+    <!-- Notch -->
+    <rect x="160" y="20" width="60" height="22" rx="11" fill="#0f172a"/>
+    <!-- Status pill (online) -->
+    <g transform="translate(28, 56)">
+      <rect width="106" height="24" rx="12" fill="white" stroke="#e2e8f0"/>
+      <circle cx="14" cy="12" r="4" fill="#22c55e"/>
+      <text x="24" y="16" font-size="10" font-weight="700" fill="#0f172a">Synced</text>
+      <text x="68" y="16" font-size="9" fill="#94a3b8">12:34</text>
+    </g>
+    <!-- Top action icons -->
+    <g transform="translate(280, 56)">
+      <rect width="32" height="24" rx="8" fill="white" stroke="#e2e8f0"/>
+      <path d="M10 12 L22 12 M16 6 L22 12 L16 18" stroke="#64748b" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+      <path d="M22 4 L28 4 M22 8 L26 8" stroke="#64748b" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(320, 56)">
+      <rect width="32" height="24" rx="8" fill="#2563eb"/>
+      <text x="16" y="17" text-anchor="middle" font-size="11" font-weight="700" fill="white">⚡</text>
+    </g>
+
+    <!-- Section title -->
+    <text x="190" y="140" text-anchor="middle" font-size="24" font-weight="800" fill="#0f172a">Upload Document</text>
+    <text x="190" y="164" text-anchor="middle" font-size="11" fill="#64748b">Drag &amp; drop, browse, or scan a document</text>
+
+    <!-- Smart Scan + Quick Photo row -->
+    <g transform="translate(28, 188)">
+      <rect width="155" height="48" rx="14" fill="url(#primaryGrad)" filter="url(#softShadow)"/>
+      <text x="22" y="30" font-size="15" font-weight="700" fill="white">⊞</text>
+      <text x="40" y="30" font-size="13" font-weight="600" fill="white">Smart Scan</text>
+    </g>
+    <g transform="translate(197, 188)">
+      <rect width="155" height="48" rx="14" fill="url(#primaryGrad)" filter="url(#softShadow)"/>
+      <text x="22" y="30" font-size="15" font-weight="700" fill="white">◉</text>
+      <text x="40" y="30" font-size="13" font-weight="600" fill="white">Quick Photo</text>
+    </g>
+
+    <!-- Drop zone -->
+    <g transform="translate(28, 256)">
+      <rect width="324" height="222" rx="22" fill="white" stroke="#94a3b8" stroke-width="2" stroke-dasharray="10 7"/>
+      <circle cx="162" cy="74" r="36" fill="#2563eb" opacity="0.14"/>
+      <path d="M162 56 L162 92 M148 76 L162 60 L176 76" stroke="#2563eb" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="162" y="128" text-anchor="middle" font-size="13" fill="#475569">PDF, Word, JPEG, PNG, WebP</text>
+      <text x="162" y="146" text-anchor="middle" font-size="11" fill="#94a3b8">up to 50 MB · works offline</text>
+      <rect x="84" y="166" width="156" height="38" rx="12" fill="url(#primaryGrad)" filter="url(#softShadow)"/>
+      <text x="162" y="190" text-anchor="middle" font-size="13" font-weight="600" fill="white">Browse Files</text>
+    </g>
+
+    <!-- Privacy hint -->
+    <g transform="translate(28, 502)">
+      <rect width="324" height="58" rx="14" fill="#22c55e" opacity="0.10"/>
+      <text x="20" y="22" font-size="11" font-weight="700" fill="#15803d">🔒 YOUR DATA STAYS HERE</text>
+      <text x="20" y="40" font-size="10" fill="#166534">Files cached locally · never sent to a server</text>
+      <text x="20" y="54" font-size="10" fill="#166534">unless you explicitly enable cloud sync.</text>
+    </g>
+
+    <!-- Bottom action bar -->
+    <g transform="translate(20, 594)">
+      <rect width="340" height="62" rx="22" fill="white" stroke="#e2e8f0" filter="url(#softShadow)"/>
+      <!-- Upload active -->
+      <rect x="6" y="6" width="80" height="50" rx="16" fill="#2563eb" fill-opacity="0.14"/>
+      <text x="46" y="28" text-anchor="middle" font-size="15" fill="#2563eb" font-weight="700">↑</text>
+      <text x="46" y="44" text-anchor="middle" font-size="9" font-weight="800" fill="#2563eb">UPLOAD</text>
+      <text x="135" y="28" text-anchor="middle" font-size="15" fill="#64748b">✎</text>
+      <text x="135" y="44" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">SIGN</text>
+      <text x="206" y="28" text-anchor="middle" font-size="15" fill="#64748b">▭</text>
+      <text x="206" y="44" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">FIELDS</text>
+      <text x="278" y="28" text-anchor="middle" font-size="15" fill="#64748b">↓</text>
+      <text x="278" y="44" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">DONE</text>
+    </g>
+  </g>
+
+  <!-- Annotations -->
+  <g transform="translate(478, 130)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#2563eb">01</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">Drag, drop, or browse</text>
+    <text x="78" y="22" font-size="12" fill="#475569">Accepts .pdf, .docx, .jpg, .png,</text>
+    <text x="78" y="38" font-size="12" fill="#475569">.webp up to 50 MB. Files cache</text>
+    <text x="78" y="54" font-size="12" fill="#475569">locally so the upload works offline.</text>
+  </g>
+  <line x1="460" y1="180" x2="492" y2="180" stroke="#2563eb" stroke-width="2"/>
+  <circle cx="492" cy="180" r="6" fill="#2563eb"/>
+
+  <g transform="translate(478, 280)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#f97316">02</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">Smart Scan = native camera</text>
+    <text x="78" y="22" font-size="12" fill="#475569">Multi-page document scanner with</text>
+    <text x="78" y="38" font-size="12" fill="#475569">auto edge detection, contrast</text>
+    <text x="78" y="54" font-size="12" fill="#475569">enhancement &amp; perspective fix</text>
+    <text x="78" y="70" font-size="12" fill="#475569">(Capacitor @capacitor/camera).</text>
+  </g>
+  <line x1="460" y1="320" x2="492" y2="320" stroke="#f97316" stroke-width="2"/>
+  <circle cx="492" cy="320" r="6" fill="#f97316"/>
+
+  <g transform="translate(478, 480)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#22c55e">03</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">Quick Photo for one-off scans</text>
+    <text x="78" y="22" font-size="12" fill="#475569">Single-shot camera capture with</text>
+    <text x="78" y="38" font-size="12" fill="#475569">image cropping dialog before</text>
+    <text x="78" y="54" font-size="12" fill="#475569">the doc enters the workflow.</text>
+  </g>
+  <line x1="460" y1="510" x2="492" y2="510" stroke="#22c55e" stroke-width="2"/>
+  <circle cx="492" cy="510" r="6" fill="#22c55e"/>
+
+  <g transform="translate(478, 620)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#06b6d4">04</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">4-step guided flow</text>
+    <text x="78" y="22" font-size="12" fill="#475569">Upload → Sign → Fields → Done.</text>
+    <text x="78" y="38" font-size="12" fill="#475569">Swipe cards or tap tabs. State</text>
+    <text x="78" y="54" font-size="12" fill="#475569">persists across steps.</text>
+  </g>
+  <line x1="460" y1="660" x2="492" y2="660" stroke="#06b6d4" stroke-width="2"/>
+  <circle cx="492" cy="660" r="6" fill="#06b6d4"/>
+</svg>

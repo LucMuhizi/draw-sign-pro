@@ -1,0 +1,283 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bgOrb" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2563eb" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bgOrbAccent" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="phoneInterior" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#eef2f7"/>
+    </linearGradient>
+    <filter id="phoneShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#0f172a" flood-opacity="0.18"/>
+    </filter>
+    <filter id="softShadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <radialGradient id="burstGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22c55e" stop-opacity="0.55"/>
+      <stop offset="60%" stop-color="#eab308" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Backdrop -->
+  <rect width="900" height="920" fill="#f1f5f9"/>
+  <circle cx="780" cy="160" r="260" fill="url(#bgOrb)"/>
+  <circle cx="120" cy="780" r="220" fill="url(#bgOrbAccent)"/>
+
+  <!-- Title strip -->
+  <text x="30" y="34" font-size="11" font-weight="700" fill="#22c55e" letter-spacing="2">STEP 04 / 04 · EXPORT</text>
+  <text x="30" y="58" font-size="22" font-weight="800" fill="#0f172a">Save the signed PDF with an audit certificate</text>
+
+  <!-- Phone frame -->
+  <g transform="translate(60, 90)" filter="url(#phoneShadow)">
+    <rect width="380" height="800" rx="42" fill="#0f172a"/>
+    <rect x="6" y="6" width="368" height="788" rx="38" fill="url(#phoneInterior)"/>
+    <rect x="160" y="20" width="60" height="22" rx="11" fill="#0f172a"/>
+
+    <!-- Top toolbar -->
+    <g transform="translate(20, 60)">
+      <rect width="48" height="34" rx="10" fill="white" stroke="#e2e8f0"/>
+      <text x="24" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">‹</text>
+    </g>
+    <text x="190" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">lease_2024-signed.pdf</text>
+    <g transform="translate(264, 60)">
+      <rect width="34" height="34" rx="10" fill="white" stroke="#e2e8f0"/>
+      <path d="M11 21 L21 11 M16 6 L21 6 L21 11 M21 11 L21 21 L16 21" stroke="#475569" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(304, 60)">
+      <rect width="56" height="34" rx="10" fill="url(#primaryGrad)"/>
+      <text x="28" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="white">Share</text>
+    </g>
+
+    <!-- Page nav -->
+    <g transform="translate(28, 108)">
+      <rect width="324" height="32" rx="10" fill="white" stroke="#e2e8f0" filter="url(#softShadow)"/>
+      <text x="22" y="20" font-size="11" font-weight="700" fill="#475569">‹</text>
+      <text x="42" y="20" font-size="11" font-weight="700" fill="#0f172a">Page</text>
+      <text x="92" y="20" font-size="13" font-weight="800" fill="#2563eb">2</text>
+      <text x="104" y="20" font-size="11" fill="#94a3b8">/ 3</text>
+      <text x="130" y="20" font-size="11" font-weight="700" fill="#475569">›</text>
+      <text x="240" y="20" font-size="10" font-weight="700" fill="#22c55e">✓ Signed · 3 fields</text>
+    </g>
+
+    <!-- Document preview with success burst overlay -->
+    <g transform="translate(28, 152)">
+      <rect width="324" height="280" rx="14" fill="white" stroke="#e2e8f0" filter="url(#softShadow)"/>
+      <!-- Header bar of the page -->
+      <text x="20" y="28" font-size="11" font-weight="800" fill="#0f172a">LEASE AGREEMENT · PAGE 2</text>
+      <line x1="20" y1="36" x2="304" y2="36" stroke="#e2e8f0"/>
+      <!-- Body text mock -->
+      <g fill="#475569" font-size="8">
+        <rect x="20" y="46" width="280" height="2.5" rx="1"/>
+        <rect x="20" y="52" width="260" height="2.5" rx="1"/>
+        <rect x="20" y="58" width="270" height="2.5" rx="1"/>
+        <rect x="20" y="64" width="240" height="2.5" rx="1"/>
+        <rect x="20" y="70" width="280" height="2.5" rx="1"/>
+        <rect x="20" y="84" width="270" height="2.5" rx="1"/>
+        <rect x="20" y="90" width="250" height="2.5" rx="1"/>
+        <rect x="20" y="96" width="280" height="2.5" rx="1"/>
+      </g>
+
+      <!-- Placed fields: signature, date, initials, checkbox -->
+      <g transform="translate(190, 110)">
+        <rect width="100" height="32" rx="6" fill="white" stroke="#2563eb" stroke-width="1.5" filter="url(#softShadow)"/>
+        <text x="50" y="22" text-anchor="middle" font-size="18" font-style="italic" fill="#0f172a" font-family="'Brush Script MT','Lucida Handwriting',cursive">John Smith</text>
+      </g>
+      <g transform="translate(20, 156)">
+        <rect width="78" height="20" rx="4" fill="#fff7ed" stroke="#f97316" stroke-width="1.4"/>
+        <text x="39" y="14" text-anchor="middle" font-size="10" font-weight="600" fill="#9a3412">2026-06-23</text>
+      </g>
+      <g transform="translate(110, 156)">
+        <rect width="38" height="20" rx="4" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.4"/>
+        <text x="19" y="14" text-anchor="middle" font-size="10" font-weight="800" fill="#0e7490">J.S</text>
+      </g>
+      <g transform="translate(160, 156)">
+        <rect width="20" height="20" rx="4" fill="#dcfce7" stroke="#22c55e" stroke-width="1.4"/>
+        <path d="M5 10 L9 14 L15 6" stroke="#15803d" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+
+      <g fill="#475569" font-size="8">
+        <rect x="20" y="194" width="280" height="2.5" rx="1"/>
+        <rect x="20" y="200" width="270" height="2.5" rx="1"/>
+        <rect x="20" y="206" width="220" height="2.5" rx="1"/>
+        <rect x="20" y="220" width="280" height="2.5" rx="1"/>
+        <rect x="20" y="226" width="250" height="2.5" rx="1"/>
+        <rect x="20" y="232" width="280" height="2.5" rx="1"/>
+      </g>
+
+      <!-- SUCCESS BURST (paper-dust) -->
+      <circle cx="162" cy="160" r="80" fill="url(#burstGrad)"/>
+      <g transform="translate(162, 160)">
+        <g fill="#22c55e">
+          <rect x="-3" y="-32" width="6" height="6" rx="1.5" transform="rotate(0)"/>
+          <rect x="-3" y="-32" width="6" height="6" rx="1.5" transform="rotate(45)"/>
+          <rect x="-3" y="-32" width="6" height="6" rx="1.5" transform="rotate(90)"/>
+          <rect x="-3" y="-32" width="6" height="6" rx="1.5" transform="rotate(135)"/>
+          <rect x="-3" y="-32" width="6" height="6" rx="1.5" transform="rotate(180)"/>
+          <rect x="-3" y="-32" width="6" height="6" rx="1.5" transform="rotate(225)"/>
+          <rect x="-3" y="-32" width="6" height="6" rx="1.5" transform="rotate(270)"/>
+          <rect x="-3" y="-32" width="6" height="6" rx="1.5" transform="rotate(315)"/>
+        </g>
+        <g fill="#f97316" opacity="0.8">
+          <circle cx="0" cy="-48" r="3"/>
+          <circle cx="34" cy="-34" r="2.5"/>
+          <circle cx="48" cy="0" r="3"/>
+          <circle cx="34" cy="34" r="2.5"/>
+          <circle cx="0" cy="48" r="3"/>
+          <circle cx="-34" cy="34" r="2.5"/>
+          <circle cx="-48" cy="0" r="3"/>
+          <circle cx="-34" cy="-34" r="2.5"/>
+        </g>
+        <g fill="#eab308" opacity="0.7">
+          <rect x="-2" y="-58" width="4" height="4" transform="rotate(20)"/>
+          <rect x="-2" y="-58" width="4" height="4" transform="rotate(110)"/>
+          <rect x="-2" y="-58" width="4" height="4" transform="rotate(200)"/>
+          <rect x="-2" y="-58" width="4" height="4" transform="rotate(290)"/>
+        </g>
+      </g>
+    </g>
+
+    <!-- Success toast -->
+    <g transform="translate(28, 444)">
+      <rect width="324" height="40" rx="12" fill="white" stroke="#22c55e" stroke-width="1.5" filter="url(#softShadow)"/>
+      <circle cx="24" cy="20" r="11" fill="#22c55e"/>
+      <path d="M18 20 L23 25 L31 15" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="44" y="18" font-size="11" font-weight="700" fill="#15803d">Document downloaded</text>
+      <text x="44" y="32" font-size="9" fill="#475569">Saved to /Documents/lease_2024-signed.pdf</text>
+    </g>
+
+    <!-- Audit certificate mini-card -->
+    <g transform="translate(28, 496)">
+      <rect width="324" height="92" rx="14" fill="white" stroke="#e2e8f0" filter="url(#softShadow)"/>
+      <g transform="translate(16, 14)">
+        <rect width="40" height="40" rx="10" fill="#22c55e" fill-opacity="0.14"/>
+        <path d="M16 18 L16 32 L28 38 L28 22 L16 18 M16 18 L24 14" stroke="#15803d" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="50" y="20" font-size="11" font-weight="800" fill="#0f172a">Audit Certificate</text>
+        <text x="50" y="34" font-size="9" fill="#64748b">SHA-256: 7e3c9a…b21f8d · 2026-06-23 12:34</text>
+      </g>
+      <g transform="translate(16, 60)">
+        <rect width="92" height="22" rx="6" fill="#f1f5f9"/>
+        <text x="46" y="15" text-anchor="middle" font-size="9.5" fill="#475569">3 fields · 2 pages</text>
+      </g>
+      <g transform="translate(116, 60)">
+        <rect width="92" height="22" rx="6" fill="#f1f5f9"/>
+        <text x="46" y="15" text-anchor="middle" font-size="9.5" fill="#475569">PDF/A compliant</text>
+      </g>
+      <g transform="translate(216, 60)">
+        <rect width="92" height="22" rx="6" fill="#f1f5f9"/>
+        <text x="46" y="15" text-anchor="middle" font-size="9.5" fill="#2563eb" font-weight="700">View →</text>
+      </g>
+    </g>
+
+    <!-- Share sheet preview -->
+    <g transform="translate(28, 600)">
+      <rect width="324" height="100" rx="14" fill="white" stroke="#e2e8f0" filter="url(#softShadow)"/>
+      <text x="20" y="22" font-size="10" font-weight="700" fill="#64748b">SHARE TO</text>
+      <!-- Row of 5 share targets -->
+      <g transform="translate(20, 30)">
+        <circle cx="22" cy="22" r="22" fill="#22c55e"/>
+        <text x="22" y="28" text-anchor="middle" font-size="14" font-weight="800" fill="white">W</text>
+        <text x="22" y="62" text-anchor="middle" font-size="9" fill="#475569">WhatsApp</text>
+      </g>
+      <g transform="translate(78, 30)">
+        <circle cx="22" cy="22" r="22" fill="#2563eb"/>
+        <text x="22" y="28" text-anchor="middle" font-size="14" font-weight="800" fill="white">D</text>
+        <text x="22" y="62" text-anchor="middle" font-size="9" fill="#475569">Drive</text>
+      </g>
+      <g transform="translate(136, 30)">
+        <circle cx="22" cy="22" r="22" fill="#ef4444"/>
+        <text x="22" y="28" text-anchor="middle" font-size="14" font-weight="800" fill="white">G</text>
+        <text x="22" y="62" text-anchor="middle" font-size="9" fill="#475569">Gmail</text>
+      </g>
+      <g transform="translate(194, 30)">
+        <circle cx="22" cy="22" r="22" fill="#0f172a"/>
+        <text x="22" y="28" text-anchor="middle" font-size="14" font-weight="800" fill="white">⊟</text>
+        <text x="22" y="62" text-anchor="middle" font-size="9" fill="#475569">Files</text>
+      </g>
+      <g transform="translate(252, 30)">
+        <circle cx="22" cy="22" r="22" fill="url(#primaryGrad)"/>
+        <text x="22" y="28" text-anchor="middle" font-size="16" font-weight="800" fill="white">⤴</text>
+        <text x="22" y="62" text-anchor="middle" font-size="9" fill="#475569">More</text>
+      </g>
+    </g>
+
+    <!-- Bottom action bar -->
+    <g transform="translate(20, 716)">
+      <rect width="340" height="62" rx="22" fill="white" stroke="#e2e8f0" filter="url(#softShadow)"/>
+      <text x="46" y="28" text-anchor="middle" font-size="15" fill="#64748b">↑</text>
+      <text x="46" y="44" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">UPLOAD</text>
+      <text x="135" y="28" text-anchor="middle" font-size="15" fill="#64748b">✎</text>
+      <text x="135" y="44" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">SIGN</text>
+      <text x="206" y="28" text-anchor="middle" font-size="15" fill="#64748b">▭</text>
+      <text x="206" y="44" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">FIELDS</text>
+      <rect x="246" y="6" width="80" height="50" rx="16" fill="#2563eb" fill-opacity="0.14"/>
+      <text x="286" y="28" text-anchor="middle" font-size="15" fill="#2563eb" font-weight="700">✓</text>
+      <text x="286" y="44" text-anchor="middle" font-size="9" font-weight="800" fill="#2563eb">DONE</text>
+    </g>
+  </g>
+
+  <!-- Annotations -->
+  <g transform="translate(478, 130)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#2563eb">01</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">Paper-dust success burst</text>
+    <text x="78" y="22" font-size="12" fill="#475569">Subtle framer-confetti animation</text>
+    <text x="78" y="38" font-size="12" fill="#475569">celebrates the export (respects</text>
+    <text x="78" y="54" font-size="12" fill="#475569">prefers-reduced-motion).</text>
+  </g>
+  <line x1="460" y1="170" x2="492" y2="170" stroke="#2563eb" stroke-width="2"/>
+  <circle cx="492" cy="170" r="6" fill="#2563eb"/>
+
+  <g transform="translate(478, 290)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#f97316">02</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">SHA-256 audit certificate</text>
+    <text x="78" y="22" font-size="12" fill="#475569">Each export gets a cryptographic</text>
+    <text x="78" y="38" font-size="12" fill="#475569">fingerprint of the original document</text>
+    <text x="78" y="54" font-size="12" fill="#475569">+ ISO timestamp for tamper evidence.</text>
+  </g>
+  <line x1="460" y1="320" x2="492" y2="320" stroke="#f97316" stroke-width="2"/>
+  <circle cx="492" cy="320" r="6" fill="#f97316"/>
+
+  <g transform="translate(478, 460)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#22c55e">03</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">Native share sheet</text>
+    <text x="78" y="22" font-size="12" fill="#475569">@capacitor/share on mobile,</text>
+    <text x="78" y="38" font-size="12" fill="#475569">Web Share API on desktop. Falls</text>
+    <text x="78" y="54" font-size="12" fill="#475569">back to direct download if blocked.</text>
+  </g>
+  <line x1="460" y1="500" x2="492" y2="500" stroke="#22c55e" stroke-width="2"/>
+  <circle cx="492" cy="500" r="6" fill="#22c55e"/>
+
+  <g transform="translate(478, 620)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#06b6d4">04</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">PDF/A, signed &amp; verifiable</text>
+    <text x="78" y="22" font-size="12" fill="#475569">Embeds the signature as a PNG,</text>
+    <text x="78" y="38" font-size="12" fill="#475569">preserves fonts, keeps original</text>
+    <text x="78" y="54" font-size="12" fill="#475569">page sizes (pdf-lib 1.17).</text>
+  </g>
+  <line x1="460" y1="660" x2="492" y2="660" stroke="#06b6d4" stroke-width="2"/>
+  <circle cx="492" cy="660" r="6" fill="#06b6d4"/>
+
+  <g transform="translate(478, 770)">
+    <text x="0" y="26" font-size="34" font-weight="800" fill="#0f172a">05</text>
+    <text x="78" y="0" font-size="17" font-weight="700" fill="#0f172a">History + cloud sync</text>
+    <text x="78" y="22" font-size="12" fill="#475569">Saves to History tab (offline-</text>
+    <text x="78" y="38" font-size="12" fill="#475569">first via IndexedDB) and syncs</text>
+    <text x="78" y="54" font-size="12" fill="#475569">to Supabase when online.</text>
+  </g>
+  <line x1="460" y1="790" x2="492" y2="790" stroke="#0f172a" stroke-width="2"/>
+  <circle cx="492" cy="790" r="6" fill="#0f172a"/>
+</svg>
