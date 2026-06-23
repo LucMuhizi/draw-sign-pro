@@ -532,7 +532,7 @@ The first three = single day of work for big perceived-quality lift. The last th
 | `src/components/animations/PressableButton.tsx` | Reusable button with 1→0.97→1.03→1 physics |
 | `src/components/animations/SuccessBurst.tsx` | Paper-dust particles on export |
 | `src/hooks/useAutoAdvance.ts` | Camera-pan orchestration between fields |
-| `plans/premium-animations.md` | This plan |
+| `docs/design/premium-animations.md` | This plan |
 
 ### Modified files (~10)
 | File | Animations |
