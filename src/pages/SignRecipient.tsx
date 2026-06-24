@@ -36,6 +36,16 @@ export default function SignRecipient() {
   const lastBlobUrlRef = useRef<string>("");
 
   const sigPlacement = useSignaturePlacement({ signature, currentPage });
+  // Phase 3 perf — `setSignatures` is the React `useState` setter
+  // returned by the hook; it has stable identity across renders.
+  // Destructuring it here (rather than including the parent
+  // `sigPlacement` object in the load-effect deps) prevents the
+  // effect from re-running every render since the hook returns a
+  // fresh object literal each call (its return statement isn't
+  // memoized). Without this destructure the effect would re-fetch
+  // the session + re-create + re-revoke a blob: URL on every parent
+  // render, which manifested as a spinning loader.
+  const { setSignatures } = sigPlacement;
 
   // Load session + source document
   useEffect(() => {
@@ -76,7 +86,7 @@ export default function SignRecipient() {
             null;
         }
         setCurrentParticipant(picked);
-        if (picked?.fields) sigPlacement.setSignatures(picked.fields);
+        if (picked?.fields) setSignatures(picked.fields);
       }
       if (error) toast.error(error);
       setLoading(false);
@@ -91,7 +101,7 @@ export default function SignRecipient() {
         lastBlobUrlRef.current = "";
       }
     };
-  }, [sessionToken, sigPlacement]);
+  }, [sessionToken, setSignatures]);
 
   // Responsive width
   useEffect(() => {
