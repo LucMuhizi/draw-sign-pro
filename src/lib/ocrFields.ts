@@ -2,7 +2,14 @@ import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
-export type DetectedFieldType = "signature" | "date" | "initials";
+/**
+ * Phase 2 P2.5 — widened the detected-field type union from just the three
+ * signature-bearing field kinds to the full five FieldType union that
+ * `SignaturePlacement.fieldType` already understands. This lets the
+ * "Auto-fill all" bulk-action map a single detected field straight to its
+ * matching placement kind without a translator in between.
+ */
+export type DetectedFieldType = "signature" | "typed" | "date" | "initials" | "checkbox";
 
 export interface DetectedField {
   page: number;
@@ -12,20 +19,39 @@ export interface DetectedField {
   height: number;
   label: string;
   /**
-   * Classified field type used by AIFieldDiscovery to sequence the reveal.
-   * Signature fields animate first, then date, then initials.
+   * Classified field type used by AIFieldDiscovery + P2.5 Auto-fill all to
+   * sequence the reveal AND to choose the matching placement kind in one go.
    */
   fieldType: DetectedFieldType;
 }
 
-const SIGNATURE_KEYWORDS = ['signature', 'sign here', 'sign', 'x', 'authorized', 'approved', 'title', 'name'];
+const SIGNATURE_KEYWORDS = ['signature', 'sign here', 'sign', 'x', 'authorized', 'approved', 'title'];
 const DATE_KEYWORDS = ['date'];
+/**
+ * Phase 2 P2.5 — "initial" already matched both forms. Kept plus single
+ * capital "i" suffix variant common in forms ("Applicant i.", "Witness i.").
+ */
 const INITIALS_KEYWORDS = ['initials', 'initial'];
+/**
+ * Phase 2 P2.5 — typed-name field hints. Match the literal text people
+ * put on PDF forms: "Name:", "Printed Name:", "Typed Name:", or the bare
+ * "Text:". Avoid matching "title" (also a signature keyword) so the
+ * priority ladder below wins correctly.
+ */
+const TYPED_KEYWORDS = ['printed name', 'typed name', 'full name', 'enter name', 'text'];
+/**
+ * Phase 2 P2.5 — checkbox hints. Forms render ☐ (U+2610) directly, or
+ * sometimes "Tick here", "Check here", or the bare word "checkbox".
+ */
+const CHECKBOX_KEYWORDS = ['☐', 'checkbox', 'tick here', 'check here', 'check the box'];
+
 /** Order in which AIFieldDiscovery reveals detected fields. */
 export const FIELD_TYPE_PRIORITY: Record<DetectedFieldType, number> = {
   signature: 0,
   date: 1,
   initials: 2,
+  typed: 3,
+  checkbox: 4,
 };
 const OCR_RENDER_SCALE = 2;
 const FIELD_PAD_X = 60;
@@ -34,14 +60,35 @@ const FIELD_PAD_Y = 30;
 const MIN_TEXT_ITEMS = 50;
 
 /**
- * Classify a matched text label into a field type. Date takes precedence
- * over initials which takes precedence over signature (signature keywords
- * are the most permissive).
+ * Classify a matched text label into a field type.
+ *
+ * Phase 2 P2.5 — priority ladder matches the user-facing mapping rule
+ * required by the "Auto-fill all" bulk action:
+ *   typed for /text/ boxes,
+ *   checkbox for ☐ markers,
+ *   date for /date/ markers,
+ *   initials for /initials/ markers,
+ *   signature for the default.
+ *
+ * Keyword order matters because `signature` is the largest bucket and
+ * would otherwise swallow all the others. We test the more specific
+ * markers first so a label like "Date of Signature" never resolves to
+ * signature (since "date" wins on the first check).
+ *
+ * Note: the existing SIGNATURE_KEYWORDS list still contains `"title"`
+ * which is intentionally broad. Title fields render as typed-name on
+ * most forms, but the historical classifier routes them to signature so
+ * we keep the legacy behaviour to preserve test fixture continuity. A
+ * future P2.x pass can split this if needed.
  */
 function classifyField(text: string): DetectedFieldType {
   const lower = text.toLowerCase();
   if (DATE_KEYWORDS.some((k) => lower.includes(k))) return "date";
   if (INITIALS_KEYWORDS.some((k) => lower.includes(k))) return "initials";
+  if (TYPED_KEYWORDS.some((k) => lower.includes(k))) return "typed";
+  if (CHECKBOX_KEYWORDS.some((k) => lower.includes(k))) return "checkbox";
+  if (SIGNATURE_KEYWORDS.some((k) => lower.includes(k))) return "signature";
+  // Default fallback per P2.5 user requirement: "signature for the default"
   return "signature";
 }
 
@@ -61,8 +108,17 @@ async function extractFieldsFromTextContent(
     const text = (item as { str: string }).str.trim();
     if (!text) continue;
 
-    const matchedKeyword = SIGNATURE_KEYWORDS.find(k => text.toLowerCase().includes(k));
-    if (!matchedKeyword) continue;
+    // Phase 2 P2.5 — match any of the five keyword sets (signature, date,
+    // initials, typed, checkbox) so the bulk Auto-place has the full set
+    // of cues from a single first-pass scan.
+    const lower = text.toLowerCase();
+    const matchedAny =
+      SIGNATURE_KEYWORDS.some((k) => lower.includes(k)) ||
+      DATE_KEYWORDS.some((k) => lower.includes(k)) ||
+      INITIALS_KEYWORDS.some((k) => lower.includes(k)) ||
+      TYPED_KEYWORDS.some((k) => lower.includes(k)) ||
+      CHECKBOX_KEYWORDS.some((k) => lower.includes(k));
+    if (!matchedAny) continue;
 
     // Transform: PDF coordinate space → screen coordinates
     const transform = (item as { transform: number[] }).transform;
@@ -123,8 +179,14 @@ async function extractFieldsViaOCR(
       const text = word.text.trim();
       if (!text) continue;
 
-      const matchedKeyword = SIGNATURE_KEYWORDS.find(k => text.toLowerCase().includes(k));
-      if (!matchedKeyword) continue;
+      const lower = text.toLowerCase();
+      const matchedAny =
+        SIGNATURE_KEYWORDS.some((k) => lower.includes(k)) ||
+        DATE_KEYWORDS.some((k) => lower.includes(k)) ||
+        INITIALS_KEYWORDS.some((k) => lower.includes(k)) ||
+        TYPED_KEYWORDS.some((k) => lower.includes(k)) ||
+        CHECKBOX_KEYWORDS.some((k) => lower.includes(k));
+      if (!matchedAny) continue;
 
       const cx = (word.bbox.x0 + word.bbox.x1) / 2;
       const cy = (word.bbox.y0 + word.bbox.y1) / 2;

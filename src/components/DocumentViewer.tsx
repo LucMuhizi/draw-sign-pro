@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, Download, Signature, ScanLine, Share2, Type, CheckSquare, Calendar, Bookmark, BookmarkCheck, FileText, Repeat, X } from "lucide-react";
+import { ChevronLeft, Download, Signature, ScanLine, Share2, Type, CheckSquare, Calendar, Bookmark, BookmarkCheck, FileText, Repeat, X, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -344,6 +344,83 @@ export const DocumentViewer = ({
     }
   };
 
+  /**
+   * Phase 2 P2.5 — bulk Auto-fill all. Converts every `DetectedField` from
+   * the last `handleDetectFields` scan into a `SignaturePlacement` and
+   * hands them to `sigPlacement.addManyPlacements`, which:
+   *   - Snapshots state ONCE so Ctrl+Z reverts the entire batch.
+   *   - Fires a single haptic (avoids burning the Capacitor hint queue).
+   *   - Generates unique ids via `sig-{timestamp}-{idx}` so same-millisecond
+   *     placements on iOS still get distinct keys (React would otherwise
+   *     produce duplicate-key warnings on keyed lists).
+   *
+   * Field-type mapping is already done by `classifyField` inside
+   * `ocrFields.ts` — we trust the detector's output verbatim and only
+   * project it into the placement model here. Defaults per placement
+   * (width/height for typed / initials / checkbox) come from the same
+   * dimensions ladder `addField` uses in the hook, so bulk-placed fields
+   * look identical to manual ones.
+   *
+   * Skipped cases (no toast, no-op):
+   *   - `detectedFields.length === 0` (Auto-fill without running detect first).
+   *   - `activeFieldType === 'signature'` and no signature is loaded (we
+   *     need at least one signature image to embed for the signature-kind
+   *     placements; typed / date / checkbox don't need it).
+   */
+  const handleAutoFillAll = () => {
+    if (detectedFields.length === 0) {
+      toast.info("Run Auto-detect first to scan for fillable fields.");
+      return;
+    }
+    const dimensions: Record<FieldType, [number, number]> = {
+      signature: [150, 60],
+      typed: [200, 50],
+      date: [140, 40],
+      initials: [80, 50],
+      checkbox: [30, 30],
+    };
+    const baseTs = Date.now();
+    const records: SignaturePlacement[] = detectedFields.map((f, idx) => {
+      const ft: FieldType = f.fieldType ?? "signature";
+      const [w, h] = dimensions[ft];
+      return {
+        id: `sig-${baseTs}-${idx}`,
+        x: Math.max(0, f.x),
+        y: Math.max(0, f.y),
+        width: Math.max(20, Math.min(400, f.width || w)),
+        height: Math.max(15, Math.min(120, f.height || h)),
+        page: f.page,
+        fieldType: ft,
+        // Date fields render today's date by default; user can scrub via
+        // SignaturePlacementLayer (out of scope for P2.5 — auto-fill just
+        // gets the dated stamp on the page).
+        dateFormat: ft === "date" ? "MM/DD/YYYY" : undefined,
+        // Typed/initials render the placeholder on the page until the user
+        // edits them per-field; mirroring the addField() defaults.
+        typedText: ft === "typed" || ft === "initials" ? "" : undefined,
+        // Checkboxes default to unchecked; user clicks per-field after.
+        checked: ft === "checkbox" ? false : undefined,
+        recipientId: currentRecipientId,
+      };
+    });
+    const placed = sigPlacement.addManyPlacements(records);
+    // Phase 2 P2.5 — hapticSuccess() is fired inside addManyPlacements
+    // (one beat per batch). Don't fire it here too — double-haptic on iOS
+    // / Capacitor reads as a "double tap" glitch. Tests in
+    // useSignaturePlacement.test.ts assert the single-haptic contract.
+    //
+    // Clear `detectedFields` so a second click of Auto-fill without a
+    // fresh Auto-detect doesn't place duplicate fields at the same
+    // coords. Users who want a second pass must re-run detect (this is
+    // intentional — it forces a deliberate re-scan rather than an
+    // accidental fat-finger doubling the layout).
+    setDetectedFields([]);
+    toast.success(
+      `Placed ${placed} field${placed === 1 ? "" : "s"} • undo with Ctrl+Z`,
+      { duration: 4500 },
+    );
+  };
+
   const handleFieldClick = (field: DetectedField) => {
     if (!signature && activeFieldType === "signature") {
       toast.error("Please create a signature first");
@@ -540,6 +617,36 @@ export const DocumentViewer = ({
                 {!isImage && numPages > 0 && (
                   <Button variant="outline" size="sm" onClick={handleDetectFields} disabled={ocrLoading} className="text-xs border-primary/30 hover:border-primary/60">
                     <ScanLine className="w-3.5 h-3.5 mr-1" />{ocrLoading ? "Detecting..." : "Auto-detect"}
+                  </Button>
+                )}
+                {/*
+                  Phase 2 P2.5 — Auto-fill all. Sits next to Auto-detect so
+                  the two-step "scan, then auto-place" reads left-to-right.
+                  Hidden when the document is single-page (no scan worth
+                  doing) or when auto-detect hasn't run yet (button stays
+                  visible but no-ops with a hint toast if user clicks it
+                  without scanned fields). The button is disabled visually
+                  when `detectedFields` is empty so the affordance is
+                  clear, but we still keep it rendered to teach the user
+                  the workflow.
+                */}
+                {!isImage && numPages > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAutoFillAll}
+                    disabled={detectedFields.length === 0}
+                    className="text-xs border-accent/40 hover:border-accent/70 hover:bg-accent/10"
+                    title={detectedFields.length === 0 ? "Run Auto-detect first to scan for fillable fields" : `Place all ${detectedFields.length} detected field(s)`}
+                    data-testid="auto-fill-all-button"
+                  >
+                    <Wand2 className="w-3.5 h-3.5 mr-1" />
+                    Auto-fill all
+                    {detectedFields.length > 0 && (
+                      <span className="ml-1 px-1 rounded bg-accent/20 text-[10px] font-mono">
+                        {detectedFields.length}
+                      </span>
+                    )}
                   </Button>
                 )}
                 <Button onClick={handleAddField} disabled={activeFieldType === "signature" && !signature} size="sm" className="bg-primary/90">

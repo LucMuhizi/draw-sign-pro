@@ -444,6 +444,47 @@ export function useSignaturePlacement({
     [currentPage, onSignaturePlaced, pushHistory],
   );
 
+  /**
+   * Phase 2 P2.5 — bulk Auto-fill all.
+   *
+   * Add many placements in one shot so the user can sign every detected
+   * field with a single tap. Critical invariants:
+   *
+   *   1. **One undo entry for the whole batch.** `pushHistory` fires once
+   *      with the pre-batch snapshot so Ctrl+Z reverts EVERY atomically-
+   *      placed field as a single batch (matches the range placement
+   *      semantics from P2.4 and matches the user requirement: "Wire it
+   *      through the same undo/redo ring buffer so it's reversible").
+   *   2. **One haptic + one onSignaturePlaced.** Spawning N haptics in
+   *      5 ms would burn through Capacitor's hint-rate limit on Android
+   *      and feel glitchy. A single success haptic marks the batch.
+   *   3. **Unique id per placement.** `Date.now()` collides on iOS When
+   *      placed in the same millisecond, so we append the loop index:
+   *      `sig-{ts}-{idx}`. Stable + human-greppable.
+   *   4. **Empty input is a no-op** (no history push, no haptic) so a
+   *      stray click on Auto-fill with no detected fields doesn't leave
+   *      a phantom "added nothing" entry in the undo stack.
+   *
+   * Returns the number of placements added, so the caller can show a
+   * concise toast like "Placed N fields (undo with Ctrl+Z)".
+   */
+  const addManyPlacements = useCallback(
+    (records: SignaturePlacement[]): number => {
+      if (!records || records.length === 0) return 0;
+      pushHistory();
+      const next = [...signaturesRef.current, ...records];
+      setSignatures(next);
+      hapticSuccess();
+      onSignaturePlaced?.(next.length);
+      return records.length;
+    },
+    // hapticSuccess is a stable module-level import — react-hooks/exhaustive-deps
+    // correctly flags it as an unnecessary dep. Omitting it silences the lint
+    // warning without losing correctness since the same closure always reads
+    // the same module export.
+    [onSignaturePlaced, pushHistory],
+  );
+
   // ─── Phase 2 P2.4 — range workflow ────────────────────────────────
 
   /**
@@ -545,6 +586,7 @@ export function useSignaturePlacement({
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
+    addManyPlacements,
     undo,
     redo,
     canUndo: historyLen > 0,
