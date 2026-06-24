@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Wifi, WifiOff, Fingerprint, RefreshCw, Users } from "lucide-react";
-import { cacheDocument, isOnline, onOnlineChange } from "@/lib/offlineMode";
+import { cacheDocument, cacheSessionDocument, getCacheInfo, isOnline, onOnlineChange } from "@/lib/offlineMode";
 import { isLockEnabled, checkBiometricLock } from "@/lib/biometricLock";
 import { hapticLight } from "@/lib/haptics";
 import { getQueueLength, startBackgroundSync, stopBackgroundSync } from "@/lib/syncQueue";
@@ -19,7 +19,7 @@ import { getProfile, isQuickSignEnabled } from "@/lib/userProfile";
 import { getItem, setItem } from "@/lib/storage";
 import { RecipientManager } from "@/components/RecipientManager";
 import { hashDocument } from "@/lib/auditTrail";
-import { createSigningSession, addParticipant, getShareUrl, type SigningParticipant } from "@/lib/multiPartySigning";
+import { createSigningSession, addParticipant, getShareUrl, type SessionMode, type SigningParticipant } from "@/lib/multiPartySigning";
 import { track } from "@/lib/telemetry";
 
 const STEPS = ["upload", "signature", "add-signature", "download"] as const;
@@ -62,6 +62,7 @@ const Index = () => {
   const [showQuickSignOverlay, setShowQuickSignOverlay] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [multiPartyMode, setMultiPartyMode] = useState(false);
+  const [multiPartyModeStrategy, setMultiPartyModeStrategy] = useState<SessionMode>("parallel");
   const [showRecipientManager, setShowRecipientManager] = useState(false);
   const [participants, setParticipants] = useState<SigningParticipant[]>([]);
   const [currentRecipientId, setCurrentRecipientId] = useState<string | undefined>();
@@ -150,25 +151,32 @@ const Index = () => {
   // Multi-party: init session when entering add-signature with multiPartyMode
   useEffect(() => {
     if (multiPartyMode && selectedFile && activeAction === "add-signature" && !sessionId) {
-      hashDocument(selectedFile).then(hash => {
-        createSigningSession(selectedFile.name, hash).then(({ session, error }) => {
-          if (session) {
-            setSessionId(session.id);
-            setShareUrl(getShareUrl(session.shareToken));
-            // Add sender as first participant
-            const senderName = profileName || user?.email?.split("@")[0] || "Me";
-            addParticipant(session.id, user?.email || "", senderName, "sender").then(({ participant }) => {
-              if (participant) {
-                setParticipants([participant]);
-                setCurrentRecipientId(participant.id);
-              }
-            });
+      hashDocument(selectedFile).then(async (hash) => {
+        // Phase 3 — drop the source document into the local hash-keyed
+        // session-doc cache BEFORE creating the session so the recipient
+        // page (on the same device) can find it on mount without going
+        // through Supabase Storage. Falls back silently on private
+        // browsing where `caches` is unavailable.
+        await cacheSessionDocument(selectedFile, hash);
+        const { session, error } = await createSigningSession(
+          selectedFile.name,
+          hash,
+          multiPartyModeStrategy,
+        );
+        if (session) {
+          setSessionId(session.id);
+          setShareUrl(getShareUrl(session.shareToken));
+          const senderName = profileName || user?.email?.split("@")[0] || "Me";
+          const { participant } = await addParticipant(session.id, user?.email || "", senderName, "sender");
+          if (participant) {
+            setParticipants([participant]);
+            setCurrentRecipientId(participant.id);
           }
-          if (error) toast.warning(error);
-        });
+        }
+        if (error) toast.warning(error);
       });
     }
-  }, [multiPartyMode, selectedFile, activeAction, sessionId]);
+  }, [multiPartyMode, multiPartyModeStrategy, selectedFile, activeAction, sessionId]);
   const handleQuickSignNow = useCallback((sigDataUrl: string) => {
     setSignature(sigDataUrl);
     setShowQuickSignOverlay(false);
@@ -310,13 +318,27 @@ const Index = () => {
                       </motion.span>
                     </Button>
                     <Button
-                      onClick={() => { setMultiPartyMode(true); setActiveAction('add-signature'); }}
+                      onClick={() => {
+                        // Phase 3 — cycle through parallel → sequential →
+                        // parallel so the same entry point doubles as a
+                        // mode picker. Subtle: a future polish iter is
+                        // to make this a 2-state segmented control inside
+                        // the recipient manager sheet instead.
+                        setMultiPartyModeStrategy(prev =>
+                          prev === 'parallel' ? 'sequential' : 'parallel',
+                        );
+                        setMultiPartyMode(true);
+                        setActiveAction('add-signature');
+                      }}
                       variant="outline"
                       size="lg"
                       className="border-primary/40 hover:border-primary text-primary hover:bg-primary/5 px-8 h-12 text-base font-semibold rounded-xl"
                     >
                       <Users className="w-5 h-5 mr-2" />
                       Multi-Party
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-primary/15 text-[10px] font-mono uppercase tracking-wide">
+                        {multiPartyModeStrategy}
+                      </span>
                     </Button>
                     </div>
                   </motion.div>

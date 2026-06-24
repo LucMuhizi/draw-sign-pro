@@ -122,9 +122,58 @@ export async function getCachedSignatures(): Promise<{ id: string; dataUrl: stri
   }
 }
 
+/**
+ * Phase 3 — hash-keyed document cache for the multi-party recipient
+ * flow. The sender writes the source document Blob under its
+ * content-hash key (computed via `auditTrail.hashDocument`) so the
+ * recipient page can retrieve the File by `session.documentHash`
+ * without going through Supabase Storage. Local-only MVP path;
+ * different-device share links still need a cloud relay which is
+ * out of scope for this iteration.
+ */
+const SESSION_DOC_CACHE = 'signdocu-session-docs';
+
+export async function cacheSessionDocument(file: File, hash: string): Promise<void> {
+  if (!('caches' in window)) return;
+  try {
+    const cache = await caches.open(SESSION_DOC_CACHE);
+    const response = new Response(file, {
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'Content-Length': String(file.size),
+        'X-Cache-Date': String(Date.now()),
+        'X-Original-Name': encodeURIComponent(file.name),
+      },
+    });
+    await cache.put(`/session-doc/${hash}`, response);
+  } catch {
+    // Private-browsing Safari throws on caches.open — swallow; the
+    // recipient flow will gracefully show a "session not found" in
+    // that case rather than blocking the sender.
+  }
+}
+
+export async function getSessionDocument(
+  hash: string,
+): Promise<{ file: File; name: string; type: string } | null> {
+  if (!('caches' in window)) return null;
+  try {
+    const cache = await caches.open(SESSION_DOC_CACHE);
+    const response = await cache.match(`/session-doc/${hash}`);
+    if (!response) return null;
+    const blob = await response.blob();
+    const nameHeader = response.headers.get('X-Original-Name');
+    const name = nameHeader ? decodeURIComponent(nameHeader) : 'document';
+    return { file: new File([blob], name, { type: blob.type }), name, type: blob.type };
+  } catch {
+    return null;
+  }
+}
+
 export async function clearOfflineCache(): Promise<void> {
   if ('caches' in window) {
     await caches.delete(CACHE_NAME);
+    await caches.delete(SESSION_DOC_CACHE);
   }
   localStorage.removeItem(LAST_DOCS_KEY);
   // Clear IndexedDB cached signatures

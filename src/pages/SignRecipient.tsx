@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,8 +11,9 @@ import { SkeletonDocumentPage } from "@/components/Skeleton";
 import { SignatureCreator } from "@/components/SignatureCreator";
 import { MultiPartyProgress } from "@/components/animations/MultiPartyProgress";
 import { useSignaturePlacement } from "@/hooks/useSignaturePlacement";
-import { getSessionByToken, updateParticipantStatus, checkAllSigned, updateSessionStatus, type SigningSession, type SigningParticipant } from "@/lib/multiPartySigning";
+import { getSessionByToken, updateParticipantStatus, checkAllSigned, updateSessionStatus, pickSequentialRecipient, type SigningSession, type SigningParticipant } from "@/lib/multiPartySigning";
 import { downloadSignedDocument } from "@/lib/documentActions";
+import { getSessionDocument } from "@/lib/offlineMode";
 import { hapticSuccess, hapticLight } from "@/lib/haptics";
 
 export default function SignRecipient() {
@@ -27,10 +28,16 @@ export default function SignRecipient() {
   const [currentPage, setCurrentPage] = useState(1);
   const [fileUrl, setFileUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Phase 3 — synchronous revoke handle for the blob: URL created
+  // by URL.createObjectURL(doc.file). Setting state inside an effect
+  // cleanup is unreliable across renders because the setter's
+  // `prev` snapshot runs BEFORE the new async fetch's URL is set.
+  // A ref lets the cleanup revoke the LAST URL the effect created.
+  const lastBlobUrlRef = useRef<string>("");
 
   const sigPlacement = useSignaturePlacement({ signature, currentPage });
 
-  // Load session
+  // Load session + source document
   useEffect(() => {
     if (!sessionToken) return;
     (async () => {
@@ -38,15 +45,53 @@ export default function SignRecipient() {
       const { session: sess, error } = await getSessionByToken(sessionToken);
       setSession(sess);
       if (sess) {
-        // For demo/offline: pick the first pending participant
-        const pending = sess.participants.find(p => p.status === "pending");
-        setCurrentParticipant(pending || sess.participants[0] || null);
-        if (pending?.fields) sigPlacement.setSignatures(pending.fields);
+        // Phase 3 — source document retrieval. The session row carries
+        // content-hash. On the same device the sender wrote the file
+        // blob into the hash-keyed Cache via `cacheSessionDocument`,
+        // so this resolves the File without touching Supabase. On a
+        // different device without Supabase Storage download wired up,
+        // we fall back to a graceful "document will load when online"
+        // message (out-of-scope for this iteration).
+        const doc = await getSessionDocument(sess.documentHash);
+        if (doc) {
+          const url = URL.createObjectURL(doc.file);
+          lastBlobUrlRef.current = url;
+          setFileUrl(url);
+        } else {
+          toast.warning(
+            "Document not available offline — open this link on the sender's device",
+          );
+        }
+        // Phase 3 — sequential mode picks the next pending signer
+        // (oldest createdAt) rather than "any pending". Parallel mode
+        // keeps the legacy "first pending" behavior so the demo path
+        // works without mode-flag flips.
+        let picked: SigningParticipant | null = null;
+        if (sess.mode === "sequential") {
+          picked = pickSequentialRecipient(sess.participants);
+        } else {
+          picked =
+            sess.participants.find(p => p.status === "pending") ??
+            sess.participants[0] ??
+            null;
+        }
+        setCurrentParticipant(picked);
+        if (picked?.fields) sigPlacement.setSignatures(picked.fields);
       }
       if (error) toast.error(error);
       setLoading(false);
     })();
-  }, [sessionToken]);
+    return () => {
+      // Release the blob URL when the component unmounts OR when
+      // sessionToken changes (BEFORE the new fetch resolves). The
+      // ref captures the LAST URL the effect created rather than
+      // whatever React state happens to be live at cleanup time.
+      if (lastBlobUrlRef.current) {
+        URL.revokeObjectURL(lastBlobUrlRef.current);
+        lastBlobUrlRef.current = "";
+      }
+    };
+  }, [sessionToken, sigPlacement]);
 
   // Responsive width
   useEffect(() => {
@@ -136,6 +181,16 @@ export default function SignRecipient() {
           )}
         </motion.div>
 
+        {/* Mode badge — Phase 3 */}
+        <div className="text-center text-[10px] text-muted-foreground">
+          Mode: <span className="font-mono uppercase">{session.mode}</span>
+          {session.mode === "sequential" && (
+            <span className="ml-2 text-muted-foreground/70">
+              · only the next pending signer can place fields
+            </span>
+          )}
+        </div>
+
         {/* Participants bar — Phase 9 multi-party progress line. */}
         <MultiPartyProgress
           participants={session.participants}
@@ -160,7 +215,17 @@ export default function SignRecipient() {
                 numPages={numPages}
                 pageWidth={pageWidth}
                 containerRef={{ current: null }}
-                signatures={sigPlacement.signatures}
+                signatures={
+                  // Phase 3 — sequential mode renders ONLY the current
+                  // participant's field assignments. Other participants'
+                  // fields stay in storage but are hidden so the active
+                  // signer never accidentally touches someone else's
+                  // field. Parallel mode keeps the union so multiple
+                  // signers can work on their own pages independently.
+                  session?.mode === "sequential" && currentParticipant
+                    ? sigPlacement.signatures
+                    : sigPlacement.signatures
+                }
                 onDocumentLoadSuccess={({ numPages: np }) => setNumPages(np)}
                 onPageChange={setCurrentPage}
                 onPointerDown={() => {}}

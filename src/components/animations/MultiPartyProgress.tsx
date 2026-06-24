@@ -250,12 +250,6 @@ export function MultiPartyProgress({
                           }
                     }
                   />
-                  {/* Hide the line completely if neither side is signed and
-                      it's just decoration — but keep it visible as a "track"
-                      so users see the structure. */}
-                  {!previousSigned && !lineFilled && (
-                    <div className="absolute inset-0 rounded-full bg-muted-foreground/20" />
-                  )}
                 </div>
               )}
             </React.Fragment>

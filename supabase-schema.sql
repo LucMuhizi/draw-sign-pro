@@ -51,6 +51,10 @@ create table if not exists signing_sessions (
   document_name text not null,
   document_storage_path text,
   document_hash text not null,
+  -- Phase 3 — sequential vs parallel signing. Default 'parallel' so
+  -- existing rows pre-migration remain valid; new rows opt in via
+  -- the `mode` arg of createSigningSession (see multiPartySigning.ts).
+  mode text not null default 'parallel' check (mode in ('parallel','sequential')),
   status text default 'pending' check (status in ('pending','in_progress','completed','expired')),
   created_by uuid references auth.users(id) on delete cascade not null,
   created_at timestamptz default now(),
