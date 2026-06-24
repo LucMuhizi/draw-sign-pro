@@ -11,15 +11,24 @@ import { cn } from "@/lib/utils";
 
 interface SkeletonProps {
   className?: string;
+  /**
+   * Inline style override — primarily for sizing primitives
+   * (SkeletonCircle / SkeletonCard / SkeletonDocumentPage) that need
+   * a numeric height or width that can't be expressed via Tailwind's
+   * static classes. Merged AFTER the className so callers can override
+   * shimmer defaults if needed.
+   */
+  style?: React.CSSProperties;
 }
 
-export function Skeleton({ className }: SkeletonProps) {
+export function Skeleton({ className, style }: SkeletonProps) {
   return (
     <div
       className={cn(
         "skeleton-shimmer rounded-lg bg-muted/60",
         className,
       )}
+      style={style}
     />
   );
 }
