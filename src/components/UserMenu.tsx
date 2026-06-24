@@ -5,6 +5,13 @@ import { AuthModal } from './AuthModal';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
+// Wrap the shadcn Button HOC so we can attach framer-motion's `motion`
+// gesture props. Using `motion.Button` (dotted access on an intrinsic
+// tag) doesn't work for a custom React component; the canonical pattern
+// is the `motion(Component)` factory which yields a forwardRef'd
+// motion-wrapped component.
+const MotionButton = motion(Button);
+
 export function UserMenu() {
   const { user, signOut } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
@@ -12,7 +19,7 @@ export function UserMenu() {
   if (!user) {
     return (
       <>
-        <motion.Button
+        <MotionButton
           variant="outline"
           size="sm"
           onClick={() => setShowAuth(true)}
@@ -22,7 +29,7 @@ export function UserMenu() {
           className="h-9 px-3 rounded-xl bg-white/80 backdrop-blur-xl border-border/50 text-muted-foreground hover:text-foreground shadow-soft"
         >
           Sign In
-        </motion.Button>
+        </MotionButton>
         <AuthModal open={showAuth} onOpenChange={setShowAuth} />
       </>
     );
@@ -44,7 +51,7 @@ export function UserMenu() {
       <span className="text-xs text-muted-foreground max-w-[120px] truncate hidden sm:inline" title={user.email ?? ''}>
         {emailDisplay}
       </span>
-      <motion.Button
+      <MotionButton
         variant="outline"
         size="sm"
         onClick={handleSignOut}
@@ -54,7 +61,7 @@ export function UserMenu() {
         className="h-9 px-3 rounded-xl bg-white/80 backdrop-blur-xl border-border/50 text-muted-foreground hover:text-destructive shadow-soft"
       >
         Sign Out
-      </motion.Button>
+      </MotionButton>
     </div>
   );
 }

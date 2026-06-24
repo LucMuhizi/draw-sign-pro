@@ -10,7 +10,7 @@ import { removeBackground, loadImage } from "@/lib/backgroundRemoval";
 import { useSignatures, type SavedSignature } from "@/lib/signatureStorage";
 import { getProfile } from "@/lib/userProfile";
 import { renderTypedSignature } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 interface SignatureCreatorProps {
   onSignatureCreate?: (signature: string) => void;
@@ -22,12 +22,12 @@ interface SignatureCreatorProps {
   onExitQuickMode?: () => void;
 }
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 16, scale: 0.97 },
   visible: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 25 } },
 };

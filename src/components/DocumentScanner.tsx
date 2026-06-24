@@ -11,7 +11,7 @@ interface DocumentScannerProps {
   onCancel: () => void;
 }
 
-export const DocumentScanner = ({ onScanComplete }: DocumentScannerProps) => {
+export const DocumentScanner = ({ onScanComplete, onCancel }: DocumentScannerProps) => {
   const [scanning, setScanning] = useState(false);
   const [isNative] = useState(Capacitor.isNativePlatform());
 

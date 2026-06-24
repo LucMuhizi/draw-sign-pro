@@ -20,6 +20,7 @@ import { getItem, setItem } from "@/lib/storage";
 import { RecipientManager } from "@/components/RecipientManager";
 import { hashDocument } from "@/lib/auditTrail";
 import { createSigningSession, addParticipant, getShareUrl, type SessionMode, type SigningParticipant } from "@/lib/multiPartySigning";
+import { shareText } from "@/lib/share";
 import { track } from "@/lib/telemetry";
 
 const STEPS = ["upload", "signature", "add-signature", "download"] as const;
@@ -573,7 +574,7 @@ const Index = () => {
         onRemoveParticipant={handleRemoveRecipient}
         shareUrl={shareUrl}
         onShare={() => {
-          import("@/lib/share").then(({ shareText }) => shareText(shareUrl, `Sign ${selectedFile?.name || "document"}`));
+          shareText(shareUrl, `Sign ${selectedFile?.name || "document"}`);
         }}
       />
     </div>
