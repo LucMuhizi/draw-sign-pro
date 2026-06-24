@@ -1,6 +1,11 @@
 /**
  * Skeleton loading primitives with shimmer animation.
- * Zero JS overhead — pure CSS tailwind animation.
+ * Zero JS overhead — pure CSS (see `.skeleton-shimmer` in index.css).
+ *
+ * P3b: the base class swaps Tailwind's `animate-pulse` (which hard-steps
+ * opacity) for a horizontal sweep that visually feels closer to native
+ * iOS / Android loading states. The gradient overlays the `bg-muted/60`
+ * tinted base, so the silhouette is still readable while loading.
  */
 import { cn } from "@/lib/utils";
 
@@ -12,7 +17,7 @@ export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
       className={cn(
-        "animate-pulse rounded-lg bg-muted/60",
+        "skeleton-shimmer rounded-lg bg-muted/60",
         className,
       )}
     />

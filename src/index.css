@@ -172,6 +172,44 @@
     100% { stroke-dashoffset: -24; }
   }
 
+  /*
+   * P3b - native-mobile loading sweep.
+   * Cleaner & subtler than the default Tailwind animate-pulse (which
+   * pulses opacity in 2 hard steps). Drives the same Skeleton.tsx
+   * primitives so PDF + docx + history list all share one shimmer
+   * sweep instead of looking like 3 different apps.
+   */
+  @keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .skeleton-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--primary) / 0.16) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+    /*
+     * Intentionally NO `will-change: background-position`.
+     *
+     * will-change promotes each element to its own compositor layer,
+     * which on long skeleton lists (History page can render 100+
+     * rows simultaneously) creates persistent GPU memory pressure
+     * that hurts low-end Android. Browser's default paint path handles
+     * a 1.6s linear-gradient background-position animation cheaply
+     * because the painted area is small (typically 30-400px wide).
+     */
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-shimmer { animation: none; background-image: none; }
+  }
+
   @keyframes gradient-shift {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
@@ -192,6 +230,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .animate-sync-ripple { animation: none; }
+    .skeleton-shimmer   { animation: none; background-image: none; }
   }
 
   @media (pointer: coarse) {

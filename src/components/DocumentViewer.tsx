@@ -21,7 +21,7 @@ import { TabletSidebarPanel } from "@/components/document-viewer/TabletSidebarPa
 import { SuccessBurst } from "@/components/animations/SuccessBurst";
 import { DocumentFoldIn } from "@/components/animations/DocumentFoldIn";
 import { getTemplates, saveTemplate, deleteTemplate, templateToPlacements, type DocumentTemplate } from "@/lib/templateStorage";
-import { SkeletonDocumentPage } from "@/components/Skeleton";
+import { SkeletonDocumentPage, SkeletonText } from "@/components/Skeleton";
 import { convertDocxToHtml, wrapDocxHtml, isDocxFile } from "@/lib/docxConverter";
 import { hashDocument, summarizeSignatureSession, normaliseSignerRole, type SignatureSummary } from "@/lib/auditTrail";
 import { SignedSummaryDialog } from "@/components/SignedSummaryDialog";
@@ -446,12 +446,12 @@ export const DocumentViewer = ({
   };
 
   /**
-   * Phase 2 P2.4 — pointer-down handler used by both the PDF and the
-   * docx paths so the page area inherits range-mode behaviour. When
-   * range mode is active and no draft exists yet, the click becomes
-   * the start anchor of a draft (no placement is created). When a
-   * draft exists, additional clicks are ignored so the user uses
-   * prev/next/thumb to set the end page and "Seal Range" to commit.
+   * Phase 2 P2.4 — pointer-down on the page column. In range mode the
+   * click becomes the start anchor of a draft (no placement is created).
+   * When a draft already exists, additional clicks are ignored so the
+   * user uses prev/next/thumb to set the end page and "Seal Range" to
+   * commit. Outside range mode we delegate to the standard
+   * handlePointerDown for drag-placement of new fields.
    */
   const handleContainerPointerDown = (e: React.PointerEvent) => {
     if (!containerRef.current) return;
@@ -792,9 +792,13 @@ export const DocumentViewer = ({
 
         {/* Docx content: div with dangerouslySetInnerHTML (no cross-origin issues) */}
         {isDocx && docxLoading ? (
-          <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-            <FileText className="w-5 h-5 mr-2 animate-pulse" />
-            Converting Word document...
+          /* P3b: capped silhouette (max-w-2xl) + flex-centered caption
+             so the loading card scales on desktop too. `pt-2` only — the
+             outer Card already supplies horizontal + top/bottom padding,
+             so an inner `p-4` would stack 32px of whitespace here. */
+          <div className="flex flex-col items-center gap-3 pt-2">
+            <SkeletonDocumentPage className="w-full max-w-2xl" />
+            <SkeletonText lines={2} className="max-w-xs" />
           </div>
         ) : isDocx && docxHtml ? (
           <div
