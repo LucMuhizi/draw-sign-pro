@@ -12,11 +12,13 @@ import { cn } from "@/lib/utils";
 interface SkeletonProps {
   className?: string;
   /**
-   * Inline style override — primarily for sizing primitives
-   * (SkeletonCircle / SkeletonCard / SkeletonDocumentPage) that need
-   * a numeric height or width that can't be expressed via Tailwind's
-   * static classes. Merged AFTER the className so callers can override
-   * shimmer defaults if needed.
+   * Inline style. Primarily used by SkeletonCircle / SkeletonCard /
+   * SkeletonDocumentPage for numeric sizing (width, height) that
+   * Tailwind's static classes can't express. Note: inline styles
+   * and Tailwind className don't 'merge' — for most CSS properties
+   * the inline declaration takes precedence over the className rule
+   * so callers should treat them as a layering choice, not a
+   * composition step.
    */
   style?: React.CSSProperties;
 }
