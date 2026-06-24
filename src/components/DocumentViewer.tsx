@@ -11,10 +11,13 @@ import { saveDocumentRecord } from "@/lib/documentHistory";
 import { detectSignatureFields, type DetectedField } from "@/lib/ocrFields";
 import { downloadSignedDocument, shareSignedDocument } from "@/lib/documentActions";
 import { useSignaturePlacement } from "@/hooks/useSignaturePlacement";
+import { useIsTabletOrLarger } from "@/hooks/use-mobile";
 import type { SignaturePlacement } from "@/lib/pdfSigner";
 
 import { DocumentRenderer, PageNavigation } from "@/components/document-viewer/DocumentRenderer";
 import { SignaturePlacementLayer } from "@/components/document-viewer/SignaturePlacementLayer";
+import { PageThumbnailSidebar } from "@/components/document-viewer/PageThumbnailSidebar";
+import { TabletSidebarPanel } from "@/components/document-viewer/TabletSidebarPanel";
 import { SuccessBurst } from "@/components/animations/SuccessBurst";
 import { DocumentFoldIn } from "@/components/animations/DocumentFoldIn";
 import { getTemplates, saveTemplate, deleteTemplate, templateToPlacements, type DocumentTemplate } from "@/lib/templateStorage";
@@ -95,6 +98,20 @@ export const DocumentViewer = ({
   const reduceMotion = useReducedMotion();
 
   const sigPlacement = useSignaturePlacement({ signature, currentPage, numPages, onSignaturePlaced, currentRecipientId });
+
+  /**
+   * Phase 2 P2.3 — `isTabletLayout` is true at >= 1024px (iPad / iPad Pro /
+   * desktop). Above the breakpoint we render the split-canvas layout: a
+   * wider main PDF canvas on the LEFT and a right-side panel for signers /
+   * role legend / page thumbnails. Below it we keep the original
+   * single-column layout (with the left-sidebar fallback for the small
+   * tablet 768-1023 range).
+   *
+   * Returns `false` until the matchMedia effect first paints; we treat
+   * the pre-paint window as mobile to avoid the "wrong layout for one
+   * frame" flash you'd get if we used `!!useMediaQuery(...)` directly.
+   */
+  const isTabletLayout = useIsTabletOrLarger();
 
   // File URL lifecycle — handle docx conversion
   useEffect(() => {
@@ -224,19 +241,29 @@ export const DocumentViewer = ({
   useEffect(() => {
     const updateWidth = () => {
       const parent = containerRef.current;
-      // Hard ceiling keeps react-pdf from allocating huge canvases on wide
-      // desktop monitors (1600px+ viewport was previously allowed before the
-      // fix removed the implicit 800 cap — that regressed desktop perf).
-      const DESKTOP_CAP = 800;
+      // Phase 2 P2.3 — raised DESKTOP_CAP from 800 to 1100 so the PDF canvas
+      // scales up proportionally on tablet/desktop. The split-canvas layout
+      // reserves ~320px for the right panel + 16px gap, so the page column
+      // has roughly viewport−336px of room; at iPad Pro (1366) that's
+      // ~1030, at iPad (1024) that's ~688 (which the 280 floor catches).
+      // The cap stays at 1100 because above that react-pdf allocates
+      // >5 MB of canvas per page in our perf tests and scroll smoothness
+      // regresses on lower-end hardware.
+      const DESKTOP_CAP = 1100;
+      const rightPanelWidth = isTabletLayout ? 320 : 0;
+      const rightPanelGap = isTabletLayout ? 16 : 0;
+      const FLOOR = 280;
       let w = 800;
       if (parent) {
         const viewportCap = typeof window !== "undefined" ? window.innerWidth : parent.clientWidth;
-        w = Math.max(280, Math.min(DESKTOP_CAP, parent.clientWidth, viewportCap));
+        const effectiveCap = Math.max(FLOOR, viewportCap - rightPanelWidth - rightPanelGap);
+        w = Math.max(FLOOR, Math.min(DESKTOP_CAP, parent.clientWidth, effectiveCap));
       } else if (typeof window !== "undefined") {
         // Pre-mount fallback: mirror the post-mount philosophy (no padding
         // subtraction). Only reached on the very first render before refs
         // attach, which is a near-zero race in React 18.
-        w = Math.min(DESKTOP_CAP, window.innerWidth);
+        const effectiveCap = Math.max(FLOOR, window.innerWidth - rightPanelWidth - rightPanelGap);
+        w = Math.max(FLOOR, Math.min(DESKTOP_CAP, effectiveCap));
       }
       setPageWidth(Math.round(w));
       // Phase 2 P2.4 — display height tracks the wrapper's clientHeight
@@ -256,7 +283,10 @@ export const DocumentViewer = ({
       if (ro) ro.disconnect();
       window.removeEventListener("resize", updateWidth);
     };
-  }, []);
+    // Re-run when the breakpoint flips so the page width caps correctly
+    // for the new layout (otherwise users would see the old 800 cap until
+    // they manually resized the window).
+  }, [isTabletLayout]);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -472,7 +502,7 @@ export const DocumentViewer = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="w-full max-w-4xl mx-auto p-6 space-y-4"
+      className="w-full max-w-4xl lg:max-w-[120rem] mx-auto p-4 sm:p-6 space-y-4"
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -698,35 +728,108 @@ export const DocumentViewer = ({
             />
           </div>
         ) : (
-          /* PDF / Image renderer */
-          <DocumentRenderer
-            fileUrl={fileUrl} isImage={isImage} currentPage={currentPage} numPages={numPages} pageWidth={pageWidth}
-            containerRef={containerRef} signatures={sigPlacement.signatures}
-            onDocumentLoadSuccess={onDocumentLoadSuccess} onPageChange={setCurrentPage}
-            onPointerDown={handleContainerPointerDown}
-            onPointerMove={(e) => { if (containerRef.current) sigPlacement.handlePointerMove(e, containerRef.current); }}
-            onPointerUp={sigPlacement.handlePointerUp}
-          >
-            <SignaturePlacementLayer
-              signatures={sigPlacement.signatures} detectedFields={detectedFields}
-              currentPage={currentPage} isImage={isImage} signature={signature}
-              onFieldClick={handleFieldClick}
-              onSignaturePointerDown={(e, sigId) => { if (containerRef.current) sigPlacement.handlePointerDown(e, containerRef.current, sigId); }}
-              onPointerMove={(e) => { if (containerRef.current) sigPlacement.handlePointerMove(e, containerRef.current); }}
-              onPointerUp={sigPlacement.handlePointerUp}
-              onResizeStart={sigPlacement.handleResizeStart}
-              onRemoveSignature={sigPlacement.removeSignature}
-              onTouchStart={sigPlacement.handleTouchStart}
-              onTouchMove={sigPlacement.handleTouchMove}
-              onTouchEnd={sigPlacement.handleTouchEnd}
-              onToggleCheckbox={sigPlacement.toggleCheckbox}
-              participants={multiPartyParticipants}
-              currentRecipientId={currentRecipientId}
-              displayWidth={pageWidth}
-              displayHeight={displayHeight}
-              rangeDraft={sigPlacement.rangeDraft}
-            />
-          </DocumentRenderer>
+          /*
+           * Phase 2 P2.3 — split-canvas dispatch:
+           *   isTabletLayout (>=1024px wide):
+           *     - PDF / image canvas occupies the LEFT column at the new
+           *       wider 1100px DESKTOP_CAP.
+           *     - TabletSidebarPanel sits on the RIGHT with signers list,
+           *       role legend, and (for multi-page) page thumbnails.
+           *   !isTabletLayout (mobile / small tablet <1024px):
+           *     - Single-column with the page column in the middle.
+           *     - For multi-page PDFs in the 768-1023 small-tablet range,
+           *       we render PageThumbnailSidebar to the LEFT of the page
+           *       column (legacy P2.2 layout) — the sidebar's own `hidden
+           *       md:flex` root class keeps it hidden below 768px.
+           */
+          (() => {
+            const pdfRenderer = (
+              <DocumentRenderer
+                fileUrl={fileUrl}
+                isImage={isImage}
+                currentPage={currentPage}
+                numPages={numPages}
+                pageWidth={pageWidth}
+                containerRef={containerRef}
+                signatures={sigPlacement.signatures}
+                onDocumentLoadSuccess={onDocumentLoadSuccess}
+                onPageChange={setCurrentPage}
+                onPointerDown={handleContainerPointerDown}
+                onPointerMove={(e) => {
+                  if (containerRef.current) sigPlacement.handlePointerMove(e, containerRef.current);
+                }}
+                onPointerUp={sigPlacement.handlePointerUp}
+              >
+                <SignaturePlacementLayer
+                  signatures={sigPlacement.signatures}
+                  detectedFields={detectedFields}
+                  currentPage={currentPage}
+                  isImage={isImage}
+                  signature={signature}
+                  onFieldClick={handleFieldClick}
+                  onSignaturePointerDown={(e, sigId) => {
+                    if (containerRef.current)
+                      sigPlacement.handlePointerDown(e, containerRef.current, sigId);
+                  }}
+                  onPointerMove={(e) => {
+                    if (containerRef.current) sigPlacement.handlePointerMove(e, containerRef.current);
+                  }}
+                  onPointerUp={sigPlacement.handlePointerUp}
+                  onResizeStart={sigPlacement.handleResizeStart}
+                  onRemoveSignature={sigPlacement.removeSignature}
+                  onTouchStart={sigPlacement.handleTouchStart}
+                  onTouchMove={sigPlacement.handleTouchMove}
+                  onTouchEnd={sigPlacement.handleTouchEnd}
+                  onToggleCheckbox={sigPlacement.toggleCheckbox}
+                  participants={multiPartyParticipants}
+                  currentRecipientId={currentRecipientId}
+                  displayWidth={pageWidth}
+                  displayHeight={displayHeight}
+                  rangeDraft={sigPlacement.rangeDraft}
+                />
+              </DocumentRenderer>
+            );
+
+            if (isTabletLayout) {
+              // Split-canvas: PDF left, right panel (signers + legend +
+              // thumbnails) on the right. The right panel self-hides when
+              // there's nothing to show (no signers + single-page PDF).
+              return (
+                <div className="flex gap-4 items-start w-full">
+                  <div className="flex-1 min-w-0">{pdfRenderer}</div>
+                  <TabletSidebarPanel
+                    fileUrl={fileUrl}
+                    numPages={numPages}
+                    currentPage={currentPage}
+                    onPageChange={setCurrentPage}
+                    signatures={sigPlacement.signatures}
+                    participants={multiPartyParticipants ?? []}
+                    currentRecipientId={currentRecipientId}
+                  />
+                </div>
+              );
+            }
+
+            // Small tablet (>= 768) and below: PDF only. If multi-page,
+            // wrap with a flex row so PageThumbnailSidebar slots in on the
+            // LEFT (legacy P2.2 layout, retained for the 768-1023 range).
+            if (!isImage && numPages > 1) {
+              return (
+                <div className="md:flex md:gap-2 md:items-start relative">
+                  <PageThumbnailSidebar
+                    fileUrl={fileUrl}
+                    numPages={numPages}
+                    currentPage={currentPage}
+                    onPageChange={setCurrentPage}
+                    signatures={sigPlacement.signatures}
+                  />
+                  <div className="flex-1 min-w-0">{pdfRenderer}</div>
+                </div>
+              );
+            }
+
+            return pdfRenderer;
+          })()
         )}
       </Card>
       </DocumentFoldIn>

@@ -2,7 +2,6 @@ import { Document, Page, pdfjs } from "react-pdf";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SkeletonDocumentPage } from "@/components/Skeleton";
-import { PageThumbnailSidebar } from "@/components/document-viewer/PageThumbnailSidebar";
 import type { SignaturePlacement } from "@/lib/pdfSigner";
 import type { ReactNode } from "react";
 
@@ -42,36 +41,24 @@ export function DocumentRenderer({
   children,
 }: DocumentRendererProps) {
   return (
-    // Phase 2 P2.2 — page thumbnails sidebar.
+    // Phase 2 P2.3 — page-thumbnails sidebar ownership moved to the parent
+    // (`DocumentViewer` / `TabletSidebarPanel`) so the sidebar can sit on
+    // the *right* side of the split-canvas layout at >=1024px. Below the
+    // tablet breakpoint the parent renders the sidebar inline to the left
+    // of the page column, matching the prior P2.2 behaviour.
     //
-    // Why the sidebar lives *outside* the existing containerRef wrapper:
-    //   1) `containerRef` is the coordinate origin for SignaturePlacementLayer
-    //      pointer events and for `downloadSignedDocument`'s image capture.
-    //      Pulling the sidebar into the same wrapper would offset every
-    //      click coordinate by the sidebar width and bleed the sidebar's
-    //      background into the exported signed image. Keeping `containerRef`
-    //      on the page column preserves both behaviours unchanged.
-    //   2) The sidebar uses `display: none` below the `md` breakpoint
-    //      (handled inside PageThumbnailSidebar itself), so on mobile the
-    //      flex layout collapses — the page column takes 100% width with
-    //      no JS branching needed at this level.
-    <div className="md:flex md:gap-2 md:items-start relative">
-      {!isImage && numPages > 1 && (
-        <PageThumbnailSidebar
-          fileUrl={fileUrl}
-          numPages={numPages}
-          currentPage={currentPage}
-          onPageChange={onPageChange}
-          signatures={signatures}
-        />
-      )}
-      <div
-        ref={containerRef}
-        className="relative bg-accent/20 rounded-xl overflow-hidden border border-border/50 flex-1 min-w-0"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-      >
+    // Keeping `containerRef` on the page column (not the parent flex
+    // wrapper) preserves:
+    //   - The coordinate origin for SignaturePlacementLayer pointer
+    //     events — the sidebar must not change click coords.
+    //   - `downloadSignedDocument`'s image-capture scope — the captured
+    //     canvas must be just the page, not the sidebar background.
+    <div className="relative bg-accent/20 rounded-xl overflow-hidden border border-border/50"
+      ref={containerRef}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
       {isImage ? (
         <img src={fileUrl} alt="Document" className="w-full h-auto max-w-full" />
       ) : (
@@ -119,7 +106,6 @@ export function DocumentRenderer({
           ))}
         </div>
       )}
-      </div>
     </div>
   );
 }
