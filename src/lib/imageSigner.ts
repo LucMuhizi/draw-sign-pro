@@ -36,10 +36,17 @@ export async function composeSignedImage(
     : null;
 
   for (const p of placements) {
-    const natX = p.x * scaleX;
-    const natY = p.y * scaleY;
-    const natW = p.width * scaleX;
-    const natH = p.height * scaleY;
+    // Phase 2 P2.4 — range placements carry normalized [0..1] coords
+    // so the same record can stamp proportional positions on every
+    // page in a multi-page span. For image output (single page), we
+    // scale the ratio directly against the image's natural dimensions
+    // — the result is identical to per-pixel scaling because an image
+    // has just one "page" to fit.
+    const isRange = !!p.range;
+    const natX = isRange ? p.x * naturalWidth : p.x * scaleX;
+    const natY = isRange ? p.y * naturalHeight : p.y * scaleY;
+    const natW = isRange ? p.width * naturalWidth : p.width * scaleX;
+    const natH = isRange ? p.height * naturalHeight : p.height * scaleY;
     const fieldType: FieldType = p.fieldType || 'signature';
 
     switch (fieldType) {

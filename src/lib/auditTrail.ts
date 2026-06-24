@@ -1,9 +1,15 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import type { SignaturePlacement } from './pdfSigner';
+import type { SignaturePlacement, PlacementRange } from './pdfSigner';
 
 export interface AuditRecord {
   documentName: string;
   documentHash: string;
+  /**
+   * One row per logical placement (not per effective stamp). For a
+   * range placement, the row carries the `range` shape so the cert
+   * page can render "Pages N-M" instead of misleadingly pinning it
+   * to one page.
+   */
   signatures: {
     id: string;
     page: number;
@@ -11,6 +17,7 @@ export interface AuditRecord {
     y: number;
     width: number;
     height: number;
+    range?: PlacementRange;
     placedAt: number;
   }[];
   signedAt: number;
@@ -88,6 +95,30 @@ export function copyPayload(summary: SignatureSummary): string {
 }
 
 /**
+ * Expand a placement into the list of page numbers on which it
+ * appears in the export. Single-page → [page]. Range →
+ * [startPage..endPage] inclusive. Used by the receipt perPage count
+ * and any future "show on page N" queries that don't need full coords.
+ *
+ * Lives in auditTrail.ts because the receipt dialog is the primary
+ * consumer; other modules that need this same expansion (pdfSigner,
+ * SignaturePlacementLayer) inline their own equivalent to avoid a
+ * circular import through both barrels.
+ */
+export function placementAppearsOnPages(
+  placement: { page: number; range?: PlacementRange },
+): number[] {
+  if (placement.range) {
+    const start = Math.max(1, placement.range.startPage);
+    const end = Math.max(start, placement.range.endPage);
+    const out: number[] = [];
+    for (let i = start; i <= end; i++) out.push(i);
+    return out;
+  }
+  return [placement.page];
+}
+
+/**
  * Build the display model used by the post-download receipt dialog.
  *
  * Pure function — easy to unit test. The caller passes the participant
@@ -113,7 +144,13 @@ export function summarizeSignatureSession(opts: {
     role?: "sender" | "signer" | "viewer" | "owner" | "witness" | "cc";
     signedAt?: number;
   }>;
-  placements: Array<{ page: number; recipientId?: string }>;
+  /**
+   * Phase 2 P2.4 — widened to accept the range field so a placement
+   * spanning `[3..7]` is correctly counted on every page in that
+   * span (see `placementAppearsOnPages`). The receipt's perPage map
+   * drives the rendered histogram in SignedSummaryDialog.
+   */
+  placements: Array<{ page: number; recipientId?: string; range?: PlacementRange }>;
   /** Active user email/id — used as "owner" fallback when no
    *  participants were passed. */
   activeUser?: { id: string; email?: string };
@@ -121,12 +158,20 @@ export function summarizeSignatureSession(opts: {
   const placements = opts.placements;
   const perPage: Record<number, number> = {};
   for (const p of placements) {
-    perPage[p.page] = (perPage[p.page] ?? 0) + 1;
+    // Phase 2 P2.4 — a range placement counts on every page in its
+    // span, so perPage reflects the EFFECTIVE field count the user
+    // will see on each page of the signed PDF. `totalFields` below
+    // still tracks logical placement count (1 range = 1 placement).
+    for (const pageNum of placementAppearsOnPages(p)) {
+      perPage[pageNum] = (perPage[pageNum] ?? 0) + 1;
+    }
   }
 
   // Per-recipient contribution counts so each SignerEntry can show the
   // exact number of fields they placed (rather than the brittle "first N
   // listed contributed TOTAL" heuristic that the previous version used).
+  // Range placements are counted once per recipient — they are one
+  // logical contribution that happens to render on multiple pages.
   const contributionsByRecipient: Record<string, number> = {};
   for (const p of placements) {
     if (p.recipientId) {
@@ -297,7 +342,20 @@ export async function generateCertificate(record: AuditRecord): Promise<Uint8Arr
   drawText('Signatures', 14, true);
   for (let i = 0; i < record.signatures.length; i++) {
     const s = record.signatures[i];
-    drawText(`#${i + 1} — Page ${s.page} at (${Math.round(s.x)}, ${Math.round(s.y)})`, 10);
+    // Phase 2 P2.4 — range placements print "Page N" (their anchor)
+    // followed by how many pages they cover, so the cert reads
+    // "Page 3 (×5 pages)" rather than hiding the multi-page span.
+    const isRange = !!s.range;
+    const pageLabel = isRange
+      ? `Pages ${s.range?.startPage}-${s.range?.endPage}`
+      : `Page ${s.page}`;
+    const coverage = isRange
+      ? `  (${(s.range?.endPage ?? 0) - (s.range?.startPage ?? 0) + 1} pages)`
+      : "";
+    drawText(
+      `#${i + 1} — ${pageLabel}${coverage} at (${Math.round(s.x)}, ${Math.round(s.y)})`,
+      isRange ? 9 : 10,
+    );
     drawText(`  Placed at: ${new Date(s.placedAt).toLocaleString()}`, 9);
   }
   drawLine();

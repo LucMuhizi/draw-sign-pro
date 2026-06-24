@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { Trash2, Check, Type, Calendar, Hash } from "lucide-react";
+import { Trash2, Check, Type, Calendar, Hash, Repeat } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { SignaturePlacement, FieldType } from "@/lib/pdfSigner";
+import { expandPlacementToPage } from "@/lib/pdfSigner";
+import type { RangeDraft } from "@/hooks/useSignaturePlacement";
 import type { DetectedField } from "@/lib/ocrFields";
 import { formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { InkedSignature } from "@/components/animations/InkedSignature";
 import { AIFieldDiscovery } from "@/components/animations/AIFieldDiscovery";
 import { RecipientBadge } from "@/components/document-viewer/RecipientBadge";
@@ -29,6 +32,22 @@ interface SignaturePlacementLayerProps {
   participants?: SigningParticipant[];
   /** Multi-party: current recipient's participant ID (to dim others) */
   currentRecipientId?: string;
+  /**
+   * Phase 2 P2.4 — wrapper pixel dimensions for the current page, used
+   * to scale normalized range coords into absolute pixel space. When
+   * omitted, range placements render at their raw (normalized) values
+   * which is visually incorrect but matches the pre-P2.4 fallback so
+   * unit tests with no wrapper context don't crash.
+   */
+  displayWidth?: number;
+  displayHeight?: number;
+  /**
+   * Phase 2 P2.4 — range draft to render as an animated ghost. The
+   * layer shows the ghost on the current page iff currentPage ∈
+   * [draft.startPage, draft.endPage]. Click handlers are deliberately
+   * not attached: drafts are sealed via the toolbar's "Seal" button.
+   */
+  rangeDraft?: RangeDraft | null;
 }
 
 function formatDateDisplay(format: string): string { return formatDate(format); }
@@ -47,6 +66,7 @@ function FieldOverlay({
   onToggleCheckbox,
   participant,
   isOtherRecipientsField,
+  isRange,
 }: {
   sig: SignaturePlacement;
   signature?: string;
@@ -61,6 +81,10 @@ function FieldOverlay({
   onToggleCheckbox?: (id: string) => void;
   participant?: SigningParticipant;
   isOtherRecipientsField?: boolean;
+  /** Phase 2 P2.4 — true when this overlay represents a range
+   *  placement. Adds a small banner so the user knows it's a
+   *  multi-page span and not just a duplicate badge. */
+  isRange?: boolean;
 }) {
   const ft: FieldType = sig.fieldType || "signature";
 
@@ -90,7 +114,14 @@ function FieldOverlay({
 
   return (
     <motion.div
-      className="absolute group touch-none pointer-events-auto"
+      className={cn(
+        // `group` is always present so the hover-driven delete / resize
+        // handles continue to derive from `group-hover:opacity-100`.
+        // Range placements additionally wear a primary-color ring so
+        // users see at a glance that a multi-page banner is active.
+        "absolute group touch-none pointer-events-auto",
+        isRange && "ring-2 ring-primary/40 rounded-lg",
+      )}
       style={{
         left: sig.x,
         top: sig.y,
@@ -98,9 +129,6 @@ function FieldOverlay({
         height: sig.height,
         opacity: isOtherRecipientsField ? 0.35 : 1,
       }}
-      // `initial` is only applied on the first mount of this motion.div, so
-      // it does not need a "skip on re-render" guard — fresh fields pop in,
-      // existing fields stay put. The `isMounted` ref pattern was redundant.
       initial={{ scale: 0.6, opacity: 0 }}
       animate={
         justCompleted
@@ -224,6 +252,20 @@ function FieldOverlay({
         </div>
       )}
 
+      {/* Range badge (Phase 2 P2.4) — quietly visible above the field
+          so users always know a multi-page span was applied. */}
+      {isRange && sig.range && (
+        <div className="absolute -top-2 -left-1 z-20 opacity-90">
+          <span
+            className="flex items-center gap-0.5 text-[9px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded shadow-glow"
+            title={`Range placement spanning pages ${sig.range.startPage}-${sig.range.endPage}`}
+          >
+            <Repeat className="w-2.5 h-2.5" />
+            <span>{sig.range.endPage - sig.range.startPage + 1}p</span>
+          </span>
+        </div>
+      )}
+
       {/* Recipient badge (multi-party) */}
       {participant && (
         <div className="absolute -top-3 -left-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
@@ -240,6 +282,53 @@ function FieldOverlay({
           {ft === "initials" && <span className="text-[8px] font-bold">IN</span>}
           {ft === "checkbox" && <Check className="w-2.5 h-2.5" />}
         </span>
+      </div>
+    </motion.div>
+  );
+}
+
+/**
+ * Phase 2 P2.4 — animated ghost for an in-progress range draft.
+ *
+ * Renders a dashed animated outline at the draft's normalized
+ * position (scaled by the wrapper's display dims) with a small
+ * "↔ Pages N-M" caption. No click/delete interactions: drafts are
+ * sealed via the toolbar button or canceled via ESC.
+ */
+function RangeDraftGhost({
+  draft,
+  displayWidth,
+  displayHeight,
+  currentPage,
+}: {
+  draft: RangeDraft;
+  displayWidth: number;
+  displayHeight: number;
+  currentPage: number;
+}) {
+  const x = draft.xNorm * displayWidth;
+  const y = draft.yNorm * displayHeight;
+  const w = draft.wNorm * displayWidth;
+  const h = draft.hNorm * displayHeight;
+  const inRange = currentPage >= draft.startPage && currentPage <= draft.endPage;
+  if (!inRange) return null;
+
+  return (
+    <motion.div
+      className="absolute pointer-events-none"
+      style={{ left: x, top: y, width: w, height: h }}
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+    >
+      <div className="w-full h-full rounded-lg border-2 border-dashed border-primary/70 bg-primary/10 flex items-center justify-center">
+        <motion.div
+          className="text-[10px] font-mono uppercase tracking-wide text-primary px-1.5 py-0.5 bg-background/90 rounded"
+          animate={{ opacity: [0.6, 1, 0.6] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+        >
+          Range {draft.startPage}–{draft.endPage}
+        </motion.div>
       </div>
     </motion.div>
   );
@@ -263,7 +352,34 @@ export function SignaturePlacementLayer({
   onToggleCheckbox,
   participants,
   currentRecipientId,
+  displayWidth,
+  displayHeight,
+  rangeDraft,
 }: SignaturePlacementLayerProps) {
+  // Phase 2 P2.4 — for each placement, expand it into the current page
+  // using `expandPlacementToPage`. Single-page placements on a different
+  // page return null; range placements return absolute pixel coords
+  // scaled to the wrapper's display dims. We then build a pseudo-SignaturePlacement
+  // with the absolute coords as a shallow overlay so the existing
+  // FieldOverlay component code stays untouched.
+  const expanded = displayWidth && displayHeight
+    ? signatures
+        .map((p) => expandPlacementToPage(p, currentPage, displayWidth, displayHeight))
+        .filter(Boolean)
+    // Fallback (no wrapper dims from caller): keep the previous
+    // filter+render behaviour so non-wrapper contexts (tests) still
+    // see the right placements for their own page.
+    : signatures
+        .filter((s) => isImage || s.page === currentPage)
+        .map((p) => ({
+          page: p.page,
+          x: p.x,
+          y: p.y,
+          width: p.width,
+          height: p.height,
+          base: p,
+        }));
+
   return (
     <div className="absolute inset-0 pointer-events-none">
       {/* Detected OCR field overlays — Phase 6 sequenced AI discovery. */}
@@ -276,15 +392,21 @@ export function SignaturePlacementLayer({
 
       {/* Placed fields — AnimatePresence handles pop-in for new fields. */}
       <AnimatePresence>
-        {signatures
-          .filter((sig) => isImage || sig.page === currentPage)
-          .map((sig) => {
-            const participant = participants?.find(p => p.id === sig.recipientId);
-            const isOther = !!currentRecipientId && !!sig.recipientId && sig.recipientId !== currentRecipientId;
-            return (
+        {expanded.map((entry) => {
+          const overlaySig: SignaturePlacement = {
+            ...entry.base,
+            x: entry.x,
+            y: entry.y,
+            width: entry.width,
+            height: entry.height,
+            page: entry.page,
+          };
+          const participant = participants?.find((p) => p.id === overlaySig.recipientId);
+          const isOther = !!currentRecipientId && !!overlaySig.recipientId && overlaySig.recipientId !== currentRecipientId;
+          return (
             <FieldOverlay
-              key={sig.id}
-              sig={sig}
+              key={overlaySig.id}
+              sig={overlaySig}
               signature={signature}
               onRemove={onRemoveSignature}
               onPointerDown={onSignaturePointerDown}
@@ -297,10 +419,23 @@ export function SignaturePlacementLayer({
               onToggleCheckbox={onToggleCheckbox}
               participant={participant}
               isOtherRecipientsField={isOther}
+              isRange={!!entry.base.range}
             />
           );
-          })}
+        })}
       </AnimatePresence>
+
+      {/* Phase 2 P2.4 — range draft ghost (only renders when the draft
+          spans the current page). Pointer events stay disabled so the
+          draft never blocks normal drags or click-through on the page. */}
+      {rangeDraft && displayWidth !== undefined && displayHeight !== undefined && (
+        <RangeDraftGhost
+          draft={rangeDraft}
+          displayWidth={displayWidth}
+          displayHeight={displayHeight}
+          currentPage={currentPage}
+        />
+      )}
     </div>
   );
 }

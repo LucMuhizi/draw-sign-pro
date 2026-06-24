@@ -148,29 +148,46 @@ async function renderDocxToPdfBlob(
     if (signatureDataUrl) {
       try {
         const sigImg = await loadImage(signatureDataUrl);
+        // Phase 2 P2.4 — docx output is a single canvas; range
+        // placements still carry normalized [0..1] coords. To keep the
+        // existing `* scale` drawing pipeline (which assumes pixel
+        // coords in the `docxDiv` coordinate space), we pre-convert the
+        // normalized range to docx-div pixels before the literal `*
+        // scale` step. The horizontal reference is `contentWidth` and
+        // the vertical reference is the full rendered docx div height
+        // (scrollHeight) so the field lands at the same proportional
+        // spot the user saw on screen.
         for (const p of placements) {
+          const isRange = !!p.range;
+          const xSrc = isRange ? p.x * contentWidth : p.x;
+          const ySrc = isRange ? p.y * docxDiv.scrollHeight : p.y;
+          const wSrc = isRange ? p.width * contentWidth : p.width;
+          const hSrc = isRange ? p.height * docxDiv.scrollHeight : p.height;
+          const cx = (xSrc + wSrc / 2) * scale;
+          const cy = (ySrc + hSrc / 2) * scale;
+          const wScaled = wSrc * scale;
+          const hScaled = hSrc * scale;
+
           if ((p.fieldType || "signature") === "signature") {
-            croppedCtx.drawImage(sigImg, p.x * scale, p.y * scale, p.width * scale, p.height * scale);
+            croppedCtx.drawImage(sigImg, xSrc * scale, ySrc * scale, wScaled, hScaled);
           } else if (p.fieldType === "typed" || p.fieldType === "initials") {
             const text = (p.typedText || "").toUpperCase();
-            const fontSize = p.fieldType === "initials" ? Math.min(p.height * 0.5, 32) : Math.min(p.height * 0.45, 22);
+            const fontSize = p.fieldType === "initials" ? Math.min(hScaled * 0.5, 32) : Math.min(hScaled * 0.45, 22);
             croppedCtx.font = `${p.fieldType === "initials" ? "bold " : ""}${fontSize}px serif`;
             croppedCtx.fillStyle = "#1a1a1a";
             croppedCtx.textAlign = "center";
             croppedCtx.textBaseline = "middle";
-            croppedCtx.fillText(text, (p.x + p.width / 2) * scale, (p.y + p.height / 2) * scale);
+            croppedCtx.fillText(text, cx, cy);
           } else if (p.fieldType === "date") {
             const dateText = new Date().toLocaleDateString();
-            const fontSize = Math.min(p.height * 0.45, 18);
+            const fontSize = Math.min(hScaled * 0.45, 18);
             croppedCtx.font = `${fontSize}px sans-serif`;
             croppedCtx.fillStyle = "#1a1a1a";
             croppedCtx.textAlign = "center";
             croppedCtx.textBaseline = "middle";
-            croppedCtx.fillText(dateText, (p.x + p.width / 2) * scale, (p.y + p.height / 2) * scale);
+            croppedCtx.fillText(dateText, cx, cy);
           } else if (p.fieldType === "checkbox") {
-            const size = Math.min(p.width, p.height, 24) * scale;
-            const cx = (p.x + p.width / 2) * scale;
-            const cy = (p.y + p.height / 2) * scale;
+            const size = Math.min(wScaled, hScaled, 24);
             croppedCtx.strokeStyle = "#333";
             croppedCtx.lineWidth = 2;
             croppedCtx.strokeRect(cx - size / 2, cy - size / 2, size, size);
@@ -331,8 +348,19 @@ export async function downloadSignedDocument(opts: DownloadOptions): Promise<Dow
   const certificate = await generateCertificate({
     documentName: file.name,
     documentHash: resolvedInputHash,
+    // Phase 2 P2.4 — include `range` on each cert row so the printable
+    // certificate prints "Pages N-M" instead of pinning a multi-page
+    // stamp to a single page. Without this, verifiers see "Page 3 on
+    // the cert" while the actual stamp appears on pages 3-7.
     signatures: signatures.map((s) => ({
-      id: s.id, page: s.page, x: s.x, y: s.y, width: s.width, height: s.height, placedAt: Date.now(),
+      id: s.id,
+      page: s.page,
+      x: s.x,
+      y: s.y,
+      width: s.width,
+      height: s.height,
+      range: s.range,
+      placedAt: Date.now(),
     })),
     signedAt: Date.now(),
   });

@@ -1,14 +1,44 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { hapticLight, hapticSuccess } from "@/lib/haptics";
 import { getProfile } from "@/lib/userProfile";
-import type { SignaturePlacement, FieldType } from "@/lib/pdfSigner";
+import type { SignaturePlacement, FieldType, PlacementRange } from "@/lib/pdfSigner";
 
 export interface UseSignaturePlacementOptions {
   signature?: string;
   currentPage: number;
+  /**
+   * Phase 2 P2.4 — total page count, used to clamp a range's endPage
+   * so the user can't drag a range past the last page. Falls back to
+   * currentPage when the document load is still pending.
+   */
+  numPages?: number;
   onSignaturePlaced?: (count: number) => void;
   /** Multi-party: current recipient ID to stamp on new placements */
   currentRecipientId?: string;
+}
+
+/**
+ * Phase 2 P2.4 — draft of a range placement still being assembled by
+ * the user. Lives separately from `signatures` so the press-and-drag
+ * UX can show a ghost on every page in `[start..end]` without
+ * polluting the export pipeline until the user explicitly seals.
+ *
+ * `xNorm` / `yNorm` / `wNorm` / `hNorm` are ratios in [0..1] of each
+ * page's display dimensions (matching the model contract for range
+ * placements). The render layer scales these back to absolute pixels
+ * via `displayWidth` / `displayHeight`.
+ */
+export interface RangeDraft {
+  startPage: number;
+  endPage: number;
+  xNorm: number;
+  yNorm: number;
+  wNorm: number;
+  hNorm: number;
+  fieldType: FieldType;
+  typedText?: string;
+  dateFormat?: string;
+  recipientId?: string;
 }
 
 /**
@@ -41,11 +71,18 @@ function snapshot(sigs: SignaturePlacement[]): SignaturePlacement[] {
 export function useSignaturePlacement({
   signature,
   currentPage,
+  numPages,
   onSignaturePlaced,
   currentRecipientId,
 }: UseSignaturePlacementOptions) {
   const [signatures, setSignatures] = useState<SignaturePlacement[]>([]);
   const [draggingSignature, setDraggingSignature] = useState<string | null>(null);
+  // Phase 2 P2.4 — range workflow state. When `rangeMode` is true and
+  // a draft exists, the layer renders a ghost on every page in
+  // [draft.startPage..draft.endPage]. The draft is converted into a
+  // real placement on `commitRangeDraft` (one undo entry).
+  const [rangeMode, setRangeMode] = useState(false);
+  const [rangeDraft, setRangeDraftState] = useState<RangeDraft | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [resizingSignature, setResizingSignature] = useState<string | null>(null);
   const [resizeCorner, setResizeCorner] = useState<string | null>(null);
@@ -407,6 +444,80 @@ export function useSignaturePlacement({
     [currentPage, onSignaturePlaced, pushHistory],
   );
 
+  // ─── Phase 2 P2.4 — range workflow ────────────────────────────────
+
+  /**
+   * Toggle the range workflow on/off. Turning off while a draft is
+   * open cancels the draft so the user never strands a half-built
+   * range that they didn't intend to keep.
+   */
+  const toggleRangeMode = useCallback(() => {
+    setRangeMode((on) => {
+      const next = !on;
+      if (!next) setRangeDraftState(null);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Set the active range draft. DocumentViewer calls this from its
+   * pointer handler when rangeMode is on and the user releases the
+   * press-and-drag on a page. Coord conversion from pixel click
+   * positions to normalized [0..1] happens in DocumentViewer where
+   * the wrapper bounds live.
+   */
+  const setRangeDraft = useCallback((draft: RangeDraft | null) => {
+    setRangeDraftState(draft);
+  }, []);
+
+  /**
+   * Drop an in-progress draft without committing. Called from ESC
+   * handler and from `toggleRangeMode` (turning range mode off).
+   */
+  const cancelRangeDraft = useCallback(() => {
+    setRangeDraftState(null);
+  }, []);
+
+  /**
+   * Convert the active draft into a real SignaturePlacement record.
+   * Snapshots the previous state so undo reverts the entire range
+   * in one step (per the user requirement: "users can revert the
+   * entire range-placement").
+   *
+   * Returns the new placement's id (or null if no draft was open).
+   * After commit, rangeMode is turned off so the next interaction
+   * starts in single-placement mode again.
+   */
+  const commitRangeDraft = useCallback((): string | null => {
+    const draft = rangeDraft;
+    if (!draft) return null;
+    pushHistory();
+    const startPage = draft.startPage;
+    const endPage = Math.max(draft.startPage, Math.min(numPages ?? draft.endPage, draft.endPage));
+    const range: PlacementRange = { startPage, endPage };
+    const newSig: SignaturePlacement = {
+      id: `sig-${Date.now()}`,
+      x: draft.xNorm,
+      y: draft.yNorm,
+      width: draft.wNorm,
+      height: draft.hNorm,
+      page: startPage,
+      range,
+      fieldType: draft.fieldType,
+      typedText: draft.fieldType === "typed" || draft.fieldType === "initials" ? draft.typedText : undefined,
+      dateFormat: draft.fieldType === "date" ? draft.dateFormat : undefined,
+      checked: draft.fieldType === "checkbox" ? false : undefined,
+      recipientId: draft.recipientId,
+    };
+    const next = [...signaturesRef.current, newSig];
+    setSignatures(next);
+    setRangeDraftState(null);
+    setRangeMode(false);
+    hapticSuccess();
+    onSignaturePlaced?.(next.length);
+    return newSig.id;
+  }, [numPages, onSignaturePlaced, pushHistory, rangeDraft]);
+
   return {
     signatures,
     setSignatures,
@@ -415,6 +526,12 @@ export function useSignaturePlacement({
     resizeCorner,
     historyLen,
     futureLen,
+    rangeMode,
+    rangeDraft,
+    toggleRangeMode,
+    setRangeDraft,
+    cancelRangeDraft,
+    commitRangeDraft,
     addSignature,
     addField,
     addSignatureAtPosition,

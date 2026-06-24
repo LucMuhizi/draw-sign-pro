@@ -1,8 +1,18 @@
 import { getItem, setItem, removeItem, getKeysByPrefix } from './storage';
-import type { SignaturePlacement, FieldType } from './pdfSigner';
+import type { SignaturePlacement, FieldType, PlacementRange } from './pdfSigner';
 
 const TEMPLATE_PREFIX = 'signdocu-template';
 
+/**
+ * Phase 2 P2.4 — placements stored in a template carry their full
+ * coord metadata so range placements round-trip correctly across
+ * sessions / devices / users. `range` is the optional multi-page span,
+ * and `coordsNormalized: true` marks the placement as a range whose
+ * x/y/w/h are ratios in [0..1] of each page's display dimensions
+ * (instead of pixel values). The flag is set automatically when
+ * `range` is present; keeping an explicit field avoids re-deriving it
+ * at unmarshal time.
+ */
 export interface DocumentTemplate {
   id: string;
   name: string;
@@ -17,6 +27,14 @@ export interface DocumentTemplate {
     fieldType: FieldType;
     typedText?: string;
     dateFormat?: string;
+    /** Multi-page span — only present on range placements. */
+    range?: PlacementRange;
+    /**
+     * True when x/y/w/h are normalized to [0..1] rather than pixels.
+     * Single-page placements leave this undefined; range placements
+     * have it set so the load path uses ratio scaling.
+     */
+    coordsNormalized?: boolean;
   }>;
   createdAt: number;
 }
@@ -44,16 +62,21 @@ export async function saveTemplate(
     name,
     documentName,
     pageCount,
-    placements: placements.map(p => ({
-      x: p.x,
-      y: p.y,
-      width: p.width,
-      height: p.height,
-      page: p.page,
-      fieldType: p.fieldType || 'signature',
-      typedText: p.typedText,
-      dateFormat: p.dateFormat,
-    })),
+    placements: placements.map(p => {
+      const isRange = !!p.range;
+      return {
+        x: p.x,
+        y: p.y,
+        width: p.width,
+        height: p.height,
+        page: p.page,
+        fieldType: p.fieldType || 'signature',
+        typedText: p.typedText,
+        dateFormat: p.dateFormat,
+        range: p.range,
+        coordsNormalized: isRange ? true : undefined,
+      };
+    }),
     createdAt: Date.now(),
   };
   await setItem(`${TEMPLATE_PREFIX}_${template.id}`, template);
@@ -66,6 +89,10 @@ export async function deleteTemplate(id: string): Promise<void> {
 
 /**
  * Convert template placements to live SignaturePlacement objects with unique IDs.
+ *
+ * Range placements carry their `range` shape and normalized coords
+ * across unmarshal. The `coordsNormalized: true` flag is preserved
+ * implicitly via the presence of `range`.
  */
 export function templateToPlacements(
   template: DocumentTemplate,
@@ -81,5 +108,8 @@ export function templateToPlacements(
     typedText: p.typedText,
     dateFormat: p.dateFormat,
     checked: false,
+    // Range metadata — carries both the span and the normalised-coords
+    // contract that the render + export layers look for.
+    range: p.range,
   }));
 }

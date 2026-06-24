@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, Download, Signature, ScanLine, Share2, Type, CheckSquare, Calendar, Bookmark, BookmarkCheck, FileText } from "lucide-react";
+import { ChevronLeft, Download, Signature, ScanLine, Share2, Type, CheckSquare, Calendar, Bookmark, BookmarkCheck, FileText, Repeat, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -64,6 +64,12 @@ export const DocumentViewer = ({
   const [docxHtml, setDocxHtml] = useState("");
   const [docxLoading, setDocxLoading] = useState(false);
   const [pageWidth, setPageWidth] = useState(800);
+  // Phase 2 P2.4 — display height of the current page wrapper, used
+  // to scale normalized range coords into pixel space. Tracks
+  // pageWidth one-for-one via the existing ResizeObserver so a window
+  // resize, keyboard show/hide, or device rotation all re-derive it
+  // without an extra subscription.
+  const [displayHeight, setDisplayHeight] = useState(0);
   const [detectedFields, setDetectedFields] = useState<DetectedField[]>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [activeFieldType, setActiveFieldType] = useState<FieldType>("signature");
@@ -88,7 +94,7 @@ export const DocumentViewer = ({
   const cameraInFlight = useRef(false);
   const reduceMotion = useReducedMotion();
 
-  const sigPlacement = useSignaturePlacement({ signature, currentPage, onSignaturePlaced, currentRecipientId });
+  const sigPlacement = useSignaturePlacement({ signature, currentPage, numPages, onSignaturePlaced, currentRecipientId });
 
   // File URL lifecycle — handle docx conversion
   useEffect(() => {
@@ -194,7 +200,7 @@ export const DocumentViewer = ({
       if (next) triggerAutoAdvance(next);
     }
     lastPlacementCount.current = count;
-  }, [sigPlacement.signatures.length, detectedFields, findNextUncoveredField, triggerAutoAdvance]);
+  }, [sigPlacement.signatures, detectedFields, findNextUncoveredField, triggerAutoAdvance]);
 
   // Responsive page width — drives <Page width={pageWidth} /> in DocumentRenderer.
   //
@@ -233,6 +239,11 @@ export const DocumentViewer = ({
         w = Math.min(DESKTOP_CAP, window.innerWidth);
       }
       setPageWidth(Math.round(w));
+      // Phase 2 P2.4 — display height tracks the wrapper's clientHeight
+      // for the same reason (canvas/PDF aspect ratio lands on the box
+      // bounds, not on a stored constant). Equals 0 when the wrapper
+      // has not yet rendered.
+      setDisplayHeight(parent ? parent.clientHeight : 0);
     };
     updateWidth();
     let ro: ResizeObserver | undefined;
@@ -251,6 +262,42 @@ export const DocumentViewer = ({
     setNumPages(numPages);
     toast.success("Document loaded successfully!");
   };
+
+  // Phase 2 P2.4 — when the user navigates pages with an in-progress
+  // range draft, the destination page becomes the draft's endPage.
+  // Effect (not setCurrentPage wrapper) so prev/next, dots, and the
+  // thumbnail sidebar all converge on the same draft-update path.
+  useEffect(() => {
+    if (!sigPlacement.rangeMode || !sigPlacement.rangeDraft) return;
+    if (sigPlacement.rangeDraft.endPage === currentPage) return;
+    sigPlacement.setRangeDraft({ ...sigPlacement.rangeDraft, endPage: currentPage });
+  }, [currentPage, sigPlacement]);
+
+  // Phase 2 P2.4 — ESC cancels an in-progress draft. Skipped when
+  // focus is in a textbox so typing in the typed-name toolbar still
+  // works (mirrors the auditTrail-undo skip in useSignaturePlacement).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "Escape" && sigPlacement.rangeDraft) {
+        e.preventDefault();
+        sigPlacement.cancelRangeDraft();
+      }
+      if (e.key === "Enter" && sigPlacement.rangeDraft) {
+        e.preventDefault();
+        sigPlacement.commitRangeDraft();
+        hapticSuccess();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [sigPlacement.rangeDraft, sigPlacement.cancelRangeDraft, sigPlacement.commitRangeDraft, sigPlacement]);
 
   // OCR field detection (PDF only)
   const handleDetectFields = async () => {
@@ -289,6 +336,56 @@ export const DocumentViewer = ({
     } else {
       sigPlacement.addField(activeFieldType);
     }
+  };
+
+  /**
+   * Phase 2 P2.4 — pointer-down handler used by both the PDF and the
+   * docx paths so the page area inherits range-mode behaviour. When
+   * range mode is active and no draft exists yet, the click becomes
+   * the start anchor of a draft (no placement is created). When a
+   * draft exists, additional clicks are ignored so the user uses
+   * prev/next/thumb to set the end page and "Seal Range" to commit.
+   */
+  const handleContainerPointerDown = (e: React.PointerEvent) => {
+    if (!containerRef.current) return;
+    if (sigPlacement.rangeMode && !sigPlacement.rangeDraft) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const displayW = rect.width;
+      const displayH = rect.height;
+      if (displayW <= 0 || displayH <= 0) return;
+      // Phase 2 P2.4 starts the range with a default-sized 150x60 box
+      // centered on the press point. Width/height match the existing
+      // signature default so the user gets the same affordance they
+      // already know; a drag-to-resize step is omitted in this MVP
+      // because range UX lives entirely in the toolbar.
+      const width = 150;
+      const height = 60;
+      const centerX = e.clientX - rect.left;
+      const centerY = e.clientY - rect.top;
+      const x = Math.max(0, Math.min(centerX - width / 2, displayW - width));
+      const y = Math.max(0, Math.min(centerY - height / 2, displayH - height));
+      sigPlacement.setRangeDraft({
+        startPage: currentPage,
+        endPage: currentPage,
+        xNorm: x / displayW,
+        yNorm: y / displayH,
+        wNorm: width / displayW,
+        hNorm: height / displayH,
+        fieldType: activeFieldType,
+        typedText: (activeFieldType === "typed" || activeFieldType === "initials") && typedFieldText.trim()
+          ? typedFieldText.trim()
+          : undefined,
+        dateFormat: activeFieldType === "date" ? "MM/DD/YYYY" : undefined,
+        recipientId: currentRecipientId,
+      });
+      hapticLight();
+      toast.info(`Range start set on page ${currentPage}. Navigate or click "Seal Range" to finish.`);
+      return;
+    }
+    // In normal single-placement mode, fall through to the existing
+    // pointer-down handler for dragndrop placement.
+    if (sigPlacement.rangeMode && sigPlacement.rangeDraft) return;
+    sigPlacement.handlePointerDown(e, containerRef.current);
   };
 
   const handleSaveTemplate = async () => {
@@ -434,6 +531,50 @@ export const DocumentViewer = ({
                   placeholder={activeFieldType === "typed" ? "Full name..." : "Initials..."}
                   className="px-2 py-1 rounded-md text-xs border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring w-24" />
               )}
+              {/* Phase 2 P2.4 — range workflow toggle. When active, the next
+                  page click sets the draft start anchor instead of
+                  creating a placement; navigation extends the end page;
+                  Seal commits one range as one undo step. */}
+              <button
+                onClick={() => sigPlacement.toggleRangeMode()}
+                className={`px-2 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
+                  sigPlacement.rangeMode
+                    ? "bg-primary text-primary-foreground shadow-glow"
+                    : "bg-secondary/30 text-muted-foreground hover:bg-secondary/50"
+                }`}
+                title="Toggle range placement mode (one record stamps across multiple pages)"
+              >
+                <Repeat className="w-3 h-3" />Range
+              </button>
+              {sigPlacement.rangeDraft && (
+                <div className="flex items-center gap-1 ml-1">
+                  <button
+                    onClick={() => {
+                      sigPlacement.commitRangeDraft();
+                      hapticSuccess();
+                      toast.success("Range sealed across pages.");
+                    }}
+                    className="px-2.5 py-1 rounded-md text-xs font-medium bg-primary text-primary-foreground shadow-glow hover:scale-[1.02] transition-all"
+                    title={`Seal range on page ${sigPlacement.rangeDraft.endPage}`}
+                  >
+                    Seal Range
+                  </button>
+                  <button
+                    onClick={() => {
+                      sigPlacement.cancelRangeDraft();
+                      hapticLight();
+                      toast.info("Range draft canceled.");
+                    }}
+                    className="p-1 rounded-md bg-secondary/40 text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-all"
+                    title="Cancel range draft (or press Esc)"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                  <span className="text-[10px] font-mono text-muted-foreground ml-1 px-1.5 py-0.5 rounded bg-secondary/30">
+                    PG {sigPlacement.rangeDraft.startPage} → {sigPlacement.rangeDraft.endPage}
+                  </span>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -562,7 +703,7 @@ export const DocumentViewer = ({
             fileUrl={fileUrl} isImage={isImage} currentPage={currentPage} numPages={numPages} pageWidth={pageWidth}
             containerRef={containerRef} signatures={sigPlacement.signatures}
             onDocumentLoadSuccess={onDocumentLoadSuccess} onPageChange={setCurrentPage}
-            onPointerDown={(e) => { if (containerRef.current) sigPlacement.handlePointerDown(e, containerRef.current); }}
+            onPointerDown={handleContainerPointerDown}
             onPointerMove={(e) => { if (containerRef.current) sigPlacement.handlePointerMove(e, containerRef.current); }}
             onPointerUp={sigPlacement.handlePointerUp}
           >
@@ -581,6 +722,9 @@ export const DocumentViewer = ({
               onToggleCheckbox={sigPlacement.toggleCheckbox}
               participants={multiPartyParticipants}
               currentRecipientId={currentRecipientId}
+              displayWidth={pageWidth}
+              displayHeight={displayHeight}
+              rangeDraft={sigPlacement.rangeDraft}
             />
           </DocumentRenderer>
         )}
