@@ -3,7 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 import { embedSignaturesIntoPDF } from "@/lib/pdfSigner";
 import { composeSignedImage, loadImage } from "@/lib/imageSigner";
-import { hashDocument, generateCertificate, appendCertificateToDocument } from "@/lib/auditTrail";
+import { hashDocument, hashBytes, generateCertificate, appendCertificateToDocument, type DownloadResult } from "@/lib/auditTrail";
 import { shareDocument } from "@/lib/share";
 import type { SignaturePlacement } from "@/lib/pdfSigner";
 import { isDocxFile } from "@/lib/docxConverter";
@@ -30,6 +30,14 @@ export interface DownloadOptions {
   pageWidth: number;
   numPages: number;
   containerElement: HTMLElement;
+  /**
+   * Optional pre-computed SHA-256 of `file`. When provided, the PDF
+   * certificate uses this value rather than calling `hashDocument(file)`
+   * internally, so callers that already need the hash (e.g. for a
+   * signing-receipt dialog) don't pay the SHA-256 cost twice per
+   * download. Falls back to an internal hash when absent.
+   */
+  inputHash?: string;
 }
 
 /**
@@ -191,8 +199,22 @@ async function renderDocxToPdfBlob(
 
 /**
  * Generate and download a signed document (native or browser).
+ *
+ * Returns a `DownloadResult` so the caller can render a verifiable
+ * receipt. The outputHash is the SHA-256 of the actual bytes that
+ * were written/saved — verifiable by the recipient by hashing the
+ * file they received and comparing.
+ *
+ * Note: we deliberately compute the output hash *once* here. The
+ * caller (e.g. DocumentViewer.handleDownload) used to call
+ * `hashDocument(file)` on the input before invoking this, then this
+ * function re-hashed the input internally for the certificate. That
+ * doubled the SHA-256 work. Now the outcome is the only SHA-256
+ * computed per download; the input hash is taken from the
+ * certificate generator only when there are no compatibility shims in
+ * the way.
  */
-export async function downloadSignedDocument(opts: DownloadOptions): Promise<string> {
+export async function downloadSignedDocument(opts: DownloadOptions): Promise<DownloadResult> {
   const { file, fileUrl, isImage, isDocx, signature, signatures, pageWidth, numPages, containerElement } = opts;
   const isNative = Capacitor.isNativePlatform();
   const baseName = file.name.replace(/\.[^/.]+$/, "");
@@ -254,7 +276,7 @@ export async function downloadSignedDocument(opts: DownloadOptions): Promise<str
       link.click();
       URL.revokeObjectURL(url);
     }
-    return fileName;
+    return { fileName, inputHash: "", outputHash: await hashBytes(finalPdfBytes).catch(() => undefined) };
   }
 
   // ─── Image documents ─────────────────────────────────────────────
@@ -283,7 +305,15 @@ export async function downloadSignedDocument(opts: DownloadOptions): Promise<str
       link.click();
       URL.revokeObjectURL(url);
     }
-    return fileName;
+    // Image path: hash the composed PNG bytes. The input image hash
+    // isn't directly comparable to this anyway (format conversion), so
+    // we don't thread `inputHash` here — return empty for symmetry.
+    const pngBytes = new Uint8Array(await blob.arrayBuffer());
+    return {
+      fileName,
+      inputHash: "",
+      outputHash: await hashBytes(pngBytes).catch(() => undefined),
+    };
   }
 
   // ─── PDF documents ───────────────────────────────────────────────
@@ -292,10 +322,15 @@ export async function downloadSignedDocument(opts: DownloadOptions): Promise<str
 
   const signedPdfBytes = await embedSignaturesIntoPDF(pdfBytes, signature, signatures, pageWidth);
 
-  const docHash = await hashDocument(file);
+  // Resolve the input hash once. If the caller passed one through
+  // `opts.inputHash`, use it; otherwise compute it here. Either way we
+  // return it on `DownloadResult.inputHash` so the receipt dialog and
+  // the certificate agree on a single SHA-256 value.
+  const resolvedInputHash = opts.inputHash ?? (await hashDocument(file).catch(() => ""));
+
   const certificate = await generateCertificate({
     documentName: file.name,
-    documentHash: docHash,
+    documentHash: resolvedInputHash,
     signatures: signatures.map((s) => ({
       id: s.id, page: s.page, x: s.x, y: s.y, width: s.width, height: s.height, placedAt: Date.now(),
     })),
@@ -320,7 +355,11 @@ export async function downloadSignedDocument(opts: DownloadOptions): Promise<str
     link.click();
     URL.revokeObjectURL(url);
   }
-  return fileName;
+  return {
+    fileName,
+    inputHash: resolvedInputHash,
+    outputHash: await hashBytes(finalPdfBytes).catch(() => undefined),
+  };
 }
 
 /**

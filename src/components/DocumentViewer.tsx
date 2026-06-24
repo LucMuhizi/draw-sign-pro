@@ -11,6 +11,8 @@ import { saveDocumentRecord } from "@/lib/documentHistory";
 import { detectSignatureFields, type DetectedField } from "@/lib/ocrFields";
 import { downloadSignedDocument, shareSignedDocument } from "@/lib/documentActions";
 import { useSignaturePlacement } from "@/hooks/useSignaturePlacement";
+import type { SignaturePlacement } from "@/lib/pdfSigner";
+
 import { DocumentRenderer, PageNavigation } from "@/components/document-viewer/DocumentRenderer";
 import { SignaturePlacementLayer } from "@/components/document-viewer/SignaturePlacementLayer";
 import { SuccessBurst } from "@/components/animations/SuccessBurst";
@@ -18,6 +20,8 @@ import { DocumentFoldIn } from "@/components/animations/DocumentFoldIn";
 import { getTemplates, saveTemplate, deleteTemplate, templateToPlacements, type DocumentTemplate } from "@/lib/templateStorage";
 import { SkeletonDocumentPage } from "@/components/Skeleton";
 import { convertDocxToHtml, wrapDocxHtml, isDocxFile } from "@/lib/docxConverter";
+import { hashDocument, summarizeSignatureSession, normaliseSignerRole, type SignatureSummary } from "@/lib/auditTrail";
+import { SignedSummaryDialog } from "@/components/SignedSummaryDialog";
 import type { FieldType } from "@/lib/pdfSigner";
 import type { SavedSignature } from "@/lib/signatureStorage";
 import type { SigningParticipant } from "@/lib/multiPartySigning";
@@ -66,6 +70,11 @@ export const DocumentViewer = ({
   const [typedFieldText, setTypedFieldText] = useState("");
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [successBurstActive, setSuccessBurstActive] = useState(false);
+  // Phase 2 P2.1 — signing receipt shown after a successful download.
+  // Kept separate from `successBurstActive` so the dialog survives a
+  // second download without flashing closed.
+  const [summary, setSummary] = useState<SignatureSummary | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const docxContentRef = useRef<HTMLDivElement>(null);
 
@@ -309,15 +318,48 @@ export const DocumentViewer = ({
     if (!containerRef.current || !signature || sigPlacement.signatures.length === 0) return;
     const toastId = toast.loading("Generating signed document...");
     try {
-      await downloadSignedDocument({
+      // Phase 2 P2.1 — measure the input hash once for PDF downloads,
+      // thread it through downloadSignedDocument so the certificate
+      // uses the same value (no double-hashing), then read both
+      // `inputHash` + `outputHash` off the DownloadResult for the
+      // receipt. Skip for image/docx since those branches discard
+      // inputHash internally.
+      const inputHash =
+        !isImage && !isDocx ? await hashDocument(file).catch(() => "") : "";
+      const result = await downloadSignedDocument({
         file, fileUrl, isImage, isDocx, signature,
         signatures: sigPlacement.signatures,
         pageWidth, numPages,
         containerElement: containerRef.current,
+        inputHash,
       });
       toast.success("Document downloaded!", { id: toastId });
       hapticSuccess();
       setSuccessBurstActive(true);
+
+      const built = summarizeSignatureSession({
+        documentName: file.name,
+        documentHash: result.inputHash || inputHash,
+        outputHash: result.outputHash,
+        signedAt: Date.now(),
+        participants: multiPartyParticipants?.map((p) => ({
+          id: p.id,
+          email: p.email,
+          name: p.name,
+          // Use normaliseSignerRole so multi-party roles (`sender` /
+          // `viewer`) collapse onto the receipt's canonical union
+          // rather than passing through unchanged. SigningParticipant
+          // doesn't carry a per-participant `signedAt`; the audit
+          // trail lives on the underlying supabase row and the receipt
+          // shows the session-wide timestamp instead.
+          role: normaliseSignerRole(p.role),
+        })),
+        placements: sigPlacement.signatures,
+        activeUser: user ? { id: user.id, email: user.email ?? "" } : undefined,
+      });
+      setSummary(built);
+      setSummaryOpen(true);
+
       if (user?.id) saveDocumentRecord(user.id, file.name, numPages || 1, sigPlacement.signatures.length);
       registerForPush().catch(() => {});
     } catch (error) {
@@ -444,6 +486,16 @@ export const DocumentViewer = ({
             </div>
           )}
         </div>
+
+        {/* Phase 2 P2.1 — post-download signing receipt.
+            Rendered once per successful download so the hash, signers,
+            timestamp, and copy/download actions stay available even after
+            the success toast fades. */}
+        <SignedSummaryDialog
+          open={summaryOpen}
+          onOpenChange={setSummaryOpen}
+          summary={summary}
+        />
 
         {/* Saved signature picker */}
         {savedSignatures && savedSignatures.length > 1 && (
