@@ -10,7 +10,9 @@ export type FieldType = 'signature' | 'typed' | 'date' | 'initials' | 'checkbox'
  * scale-1→1.15→1 + green-border + checkmark beat.
  *
  * - signature: always complete (the image is the placement)
- * - date:      always complete (dateFormat defaults to MM/DD/YYYY)
+ * - date:      always complete — `embedSignaturesIntoPDF` falls back to
+ *              'MM/DD/YYYY' when `placement.dateFormat` is empty, so the
+ *              field is always renderable.
  * - typed:     complete when typedText is non-empty
  * - initials:  complete when typedText is non-empty
  * - checkbox:  complete when checked === true
@@ -24,7 +26,10 @@ export function isFieldComplete(sig: SignaturePlacement): boolean {
     case 'initials':
       return !!sig.typedText && sig.typedText.trim().length > 0;
     case 'date':
-      return !!sig.dateFormat;
+      // Date has a built-in default format downstream so the field always
+      // has output. Mark complete so the completion-pulse animation fires
+      // as soon as the user drops the date field.
+      return true;
     case 'signature':
     default:
       return true;

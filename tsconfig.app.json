@@ -24,7 +24,12 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+
+    /* Phase 1 P1.6 — Vitest + testing-library globals.
+       Letting `describe/it/expect` and `toBeInTheDocument()` resolve as
+       globals so test files stay readable. */
+    "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
   "include": ["src"]
 }

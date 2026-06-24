@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
-import { Settings, Fingerprint, Trash2, Wifi, WifiOff, Cloud, Clock, Shield } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Settings, Fingerprint, Trash2, Wifi, WifiOff, Cloud, Clock, Shield, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BottomSheet } from "@/components/BottomSheet";
 import { isLockEnabled, setLockEnabled, isBiometricAvailable } from "@/lib/biometricLock";
 import { getCacheInfo, clearOfflineCache, isOnline } from "@/lib/offlineMode";
 import { getItem, setItem } from "@/lib/storage";
 import { toast } from "sonner";
+import { DISCLAIMER_TITLE, DISCLAIMER_BODY } from "@/lib/disclaimer";
 
 export const SettingsDialog = () => {
   const [open, setOpen] = useState(false);
@@ -26,6 +27,22 @@ export const SettingsDialog = () => {
   useEffect(() => {
     if (open) refreshCacheInfo();
   }, [open]);
+
+  // Phase 1 P1.1 — listen for the cross-component "open legal notice"
+  // event fired by `DisclaimerBanner` so the user can drill from the
+  // first-run banner into the full Settings notice without prop drilling.
+  const legalNoticeRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onLegalOpen = () => {
+      setOpen(true);
+      // Defer to next paint so the sheet is mounted before we scroll.
+      window.requestAnimationFrame(() => {
+        legalNoticeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    };
+    window.addEventListener("signdocu:open-legal-notice", onLegalOpen);
+    return () => window.removeEventListener("signdocu:open-legal-notice", onLegalOpen);
+  }, []);
 
   const handleToggleBio = () => {
     const next = !bioActive;
@@ -127,6 +144,29 @@ export const SettingsDialog = () => {
             <p className="text-xs text-muted-foreground pl-6 leading-relaxed">
               All document processing happens locally on your device. Cloud sync is optional and off by default. Your signatures and documents are never sent to any server without your explicit action.
             </p>
+          </div>
+
+          {/* Phase 1 P1.1 — Legal disclaimer. Always surfaces the up-front
+              copy that map.png lives next to the in-app banner in `Index.tsx`.
+              Surfaces via a custom event when the user's banner "Read more"
+              is tapped, so the user lands here immediately. */}
+          <div
+            id="signdocu-legal-notice"
+            ref={legalNoticeRef}
+            className="space-y-2 pt-2 border-t border-border/50"
+          >
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <Scale className="w-4 h-4 text-amber-600" />
+              Legal notice
+            </div>
+            <p className="text-xs font-semibold text-foreground pl-6 leading-snug">
+              {DISCLAIMER_TITLE}
+            </p>
+            <div className="text-xs text-muted-foreground pl-6 leading-relaxed space-y-1.5">
+              {DISCLAIMER_BODY.map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
           </div>
 
           <Button variant="ghost" onClick={() => setOpen(false)} className="w-full rounded-xl">

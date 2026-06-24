@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase';
+import { identify, reset as telemetryReset } from './telemetry';
 import type { User, AuthError } from '@supabase/supabase-js';
 
 interface AuthContextValue {
@@ -29,12 +30,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      // No `identify()` here — the listener below catches the same
+      // INITIAL_SESSION event and would otherwise fire `identify` twice
+      // on first paint.
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      // Phase 1 P1.5 — sync auth state with the telemetry system. identify
+      // is a no-op when no provider is registered.
+      if (session?.user) {
+        identify(session.user.id, { email: session.user.email });
+      } else {
+        telemetryReset();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -56,6 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isSupabaseConfigured) return;
     await supabase.auth.signOut();
     setUser(null);
+    // Phase 1 P1.5 — sign-out clears telemetry session identity so the
+    // next user on a shared device isn't attributed to the previous one.
+    telemetryReset();
   }, []);
 
   return (

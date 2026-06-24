@@ -5,6 +5,7 @@ import { SignatureCreator } from "@/components/SignatureCreator";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { Button } from "@/components/ui/button";
 import { QuickSignOverlay } from "@/components/QuickSignOverlay";
+import { DisclaimerBanner } from "@/components/DisclaimerBanner";
 import { useSignatures, syncLocalToCloud, fetchCloudSignatures } from "@/lib/signatureStorage";
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ import { getItem, setItem } from "@/lib/storage";
 import { RecipientManager } from "@/components/RecipientManager";
 import { hashDocument } from "@/lib/auditTrail";
 import { createSigningSession, addParticipant, getShareUrl, type SigningParticipant } from "@/lib/multiPartySigning";
+import { track } from "@/lib/telemetry";
 
 const STEPS = ["upload", "signature", "add-signature", "download"] as const;
 type Step = typeof STEPS[number];
@@ -123,6 +125,11 @@ const Index = () => {
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
     cacheDocument(file);
+    track("funnel_upload_started", {
+      fileType: file.type || "unknown",
+      fileSize: file.size,
+      name: file.name,
+    });
     if (quickSignOn && profileName) {
       setShowQuickSignOverlay(true);
     }
@@ -130,6 +137,10 @@ const Index = () => {
 
   const handleSignatureCreate = (sig: string) => {
     setSignature(sig);
+    track("funnel_signature_created", {
+      // We don't track the signature image — only that one was created.
+      length: sig.length,
+    });
   };
 
   const handleSignatureChange = (sig: string) => {
@@ -259,6 +270,11 @@ const Index = () => {
               </span>
             )}
           </div>
+          {/* Phase 1 P1.1 — disclaimer banner lives outside AnimatePresence
+              so its dismiss state survives tab switches. Users dismiss once and
+              never see it again. */}
+          <DisclaimerBanner />
+
           <AnimatePresence mode="wait" custom={navDir}>
             {activeAction === "upload" && (
               <motion.div
